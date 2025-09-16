@@ -27,6 +27,7 @@ def process(sessionId):
             check_ddp = check_if_valid_instagram_ddp(fileResult.value)
 
             if check_ddp == "valid":
+
               behaviors_to_extract = [
                   'time_spent',
                   'ads_seen',
@@ -50,6 +51,7 @@ def process(sessionId):
                   'login_activity',
                   'logout_activity'
               ]
+
               extraction_result = []
 
               for index, behavior_name in enumerate(behaviors_to_extract, start=1):
@@ -95,7 +97,7 @@ def process(sessionId):
 
             else:
                 retry_result = yield render_data_submission_page(
-                    retry_confirmation_no_ddp()
+                    retry_confirmation()
                 )
 
                 if retry_result.__type__ == "PayloadTrue":
@@ -105,12 +107,10 @@ def process(sessionId):
     for prompt in prompt_consent(data, behaviors_to_extract):
         result = yield prompt
         if result.__type__ == "PayloadJSON":
-            meta_frame = pd.DataFrame([1], columns=["type", "message"])
             data_submission_data = json.loads(result.value)
-            data_submission_data["meta"] = meta_frame.to_json()
             yield donate(f"{sessionId}-{key}", json.dumps(data_submission_data))
         if result.__type__ == "PayloadFalse":
-            value = json.dumps('{"status" : "data_submission declined"}')
+            value = json.dumps('{"status" : "data_donation declined"}')
             yield donate(f"{sessionId}-{key}", value)
 
 
@@ -379,10 +379,8 @@ def retry_confirmation():
             "de": "Erneut versuchen"
         }
     )
-    cancel = props.Translatable(
-        {"de": "Weiter"}
-    )
-    return props.PropsUIPromptConfirm(text, ok, cancel)
+
+    return props.PropsUIPromptConfirm(text, ok)
 
 def retry_confirmation_no_json():
     text = props.Translatable(
@@ -397,11 +395,7 @@ def retry_confirmation_no_json():
         }
     )
 
-    cancel = props.Translatable(
-        {"de": "Weiter"}
-    )
-
-    return props.PropsUIPromptConfirm(text, ok, cancel)
+    return props.PropsUIPromptConfirm(text, ok)
 
 
 def retry_confirmation_no_ddp():
@@ -415,11 +409,7 @@ def retry_confirmation_no_ddp():
         {"de": "Erneut versuchen"}
     )
 
-    cancel = props.Translatable(
-        {"de": "Weiter"}
-    )
-
-    return props.PropsUIPromptConfirm(text, ok, cancel)
+    return props.PropsUIPromptConfirm(text, ok)
 
 
 
