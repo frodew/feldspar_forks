@@ -6,15 +6,13 @@ import pandas as pd
 import zipfile
 import json
 import time
+import importlib
 
-# import extraction functions and dictionaries for all platforms
-from port.instagram_extraction_functions import *
-from port.instagram_extraction_functions_dict import (
-    extraction_dict
-)
+############################
+# MAIN FUNCTION INITIATING THE DONATION PROCESS
+############################
 
 def process(sessionId):
-    locale = "de"
     key = "instagram-data-donation-main-study"
 
     # STEP 1: select the file
@@ -29,49 +27,51 @@ def process(sessionId):
             check_ddp = check_if_valid_instagram_ddp(fileResult.value)
 
             if check_ddp == "valid":
-                extraction_result = []
+              behaviors_to_extract = [
+                  'time_spent',
+                  'ads_seen',
+                  'ads_clicked',
+                  'posts_and_videos_seen',
+                  'blocked_and_restricted_profiles',
+                  'post_and_reel_comments',
+                  'post_stories_and_comments_liked',
+                  'story_interactions',
+                  'posts_created',
+                  'stories_created',
+                  'reels_created',
+                  'followers_new',
+                  'messages',
+                  'contact_syncing',
+                  'email_address',
+                  'phone_number',
+                  'private_account',
+                  'paid_subscription',
+                  'topic_interests',
+                  'login_activity',
+                  'logout_activity'
+              ]
+              extraction_result = []
 
-                fileCount = len(extraction_dict)
+              for index, behavior_name in enumerate(behaviors_to_extract, start=1):
+                  percentage = (index / len(behaviors_to_extract)) * 100
+                  promptMessage = prompt_extraction_message(
+                      f"Extracting behavior: {behavior_name}", percentage
+                  )
+                  yield render_data_submission_page(promptMessage)
 
-                # Extracting the zipfile
-                for index, (file, entry) in enumerate(extraction_dict.items(), start=1):
-                    percentage = (index / fileCount) * 100
-                    promptMessage = prompt_extraction_message(
-                        f"Extracting file: {file}", percentage
-                    )
-                    yield render_data_submission_page(promptMessage)
+                  result = extract_behavior(behavior_name, fileResult.value)
+                  extraction_result.append(result)
 
-                    # Get list of possible file names (sometimes language sensitive)
-                    patterns = entry.get("patterns", [file])
 
-                    file_content, matched_pattern = extract_instagram_content_from_zip_folder(fileResult.value, file, patterns)
-
-                    if file_content is not None:
-                        try:
-                            # Call the extraction function with content
-                            file_extraction_result = entry["extraction_function"](file_content, locale)
-                        except Exception as e:
-                            file_extraction_result = pd.DataFrame(
-                                [f"Extrahierung fehlgeschlagen - {file}, {type(e).__name__}: {str(e)}"],
-                                columns=[str(file)],
-                            )
-                    else:
-                        file_extraction_result = pd.DataFrame(
-                            [f'(Datei "{str(file)}" fehlt)'],
-                            columns=["Keine Informationen"],
-                        )
-
-                    extraction_result.append(file_extraction_result)
-
-                if len(extraction_result) > 0:
-                    data = extraction_result
-                    break
-                else:
-                    retry_result = yield render_data_submission_page(retry_confirmation())
-                    if retry_result.__type__ == "PayloadTrue":
-                        continue
-                    else:
-                        break
+              if len(extraction_result) > 0:
+                 data = extraction_result
+                 break
+              else:
+                 retry_result = yield render_data_submission_page(retry_confirmation())
+                 if retry_result.__type__ == "PayloadTrue":
+                     continue
+                 else:
+                     break
 
 
             elif (
@@ -102,7 +102,7 @@ def process(sessionId):
                     continue
 
     # STEP 2: ask for consent
-    for prompt in prompt_consent(data):
+    for prompt in prompt_consent(data, behaviors_to_extract):
         result = yield prompt
         if result.__type__ == "PayloadJSON":
             meta_frame = pd.DataFrame([1], columns=["type", "message"])
@@ -112,6 +112,11 @@ def process(sessionId):
         if result.__type__ == "PayloadFalse":
             value = json.dumps('{"status" : "data_submission declined"}')
             yield donate(f"{sessionId}-{key}", value)
+
+
+############################
+# HELPER FUNCTIONS IN THE DONATION PROCESS
+############################
 
 def check_if_valid_instagram_ddp(filename):
     """Check if the uploaded file is a valid Instagram data download package"""
@@ -157,364 +162,188 @@ def check_if_valid_instagram_ddp(filename):
         print(f"An error occurred: {e}")
         return "invalid_file_error"
 
-def extract_instagram_content_from_zip_folder(zip_file_path, file_key, patterns):
+def extract_behavior(behavior_name, zip_file_path):
     """
-    Extract JSON content from Instagram data export zip file based on the file key.
+    Extract data for a specific behavior using the new per-file system.
 
     Parameters:
-    - zip_file_path: Path to the zip file
-    - file_key: The key from extraction_dict (e.g., 'messages', 'time_spent')
-    - patterns: File patterns to look for (used as fallback)
+    - behavior_name: Name of the behavior (e.g., 'login_activity', 'time_spent')
+    - zip_file_path: Path to the ZIP file
 
-    Special handling for:
-    1. Message files - combines all conversations
-    2. Time spent/sessions - loads posts_viewed and/or videos_watched
+    Returns:
+    - DataFrame with extracted data or error DataFrame
     """
     try:
-        with zipfile.ZipFile(zip_file_path, "r") as zip_ref:
-            # Get the list of file names in the zip file
-            file_names = zip_ref.namelist()
+        # Dynamically import the behavior module
+        behavior_module = importlib.import_module(f'port.behaviors.{behavior_name}')
 
-            # Special handling for messages
-            if file_key == "messages":
-                # This is for messages - we need to find all message files
-                all_messages_data = {"combined_messages": []}
+        # Get extraction function from the module
+        extraction_function = getattr(behavior_module, f'extract_{behavior_name}')
 
-                # Find all message files in the ZIP (look in both inbox and message_requests folders)
-                message_files = []
-                for name in file_names:
-                    if name.endswith("message_1.json") and (
-                        "/inbox/" in name or "/message_requests/" in name
-                    ):
-                        message_files.append(name)
+        # Call the behavior's extraction function directly with ZIP file path
+        try:
+            result = extraction_function(zip_file_path)
 
-                if not message_files:
-                    print("No message files found")
-                    return None, "message_1.json"
+            # Handle None return (missing files)
+            if result is None:
+                return pd.DataFrame(
+                    [f'(Datei "{behavior_name}" fehlt)'],
+                    columns=["Keine Informationen"],
+                )
 
-                for message_file in message_files:
-                    try:
-                        with zip_ref.open(message_file) as json_file:
-                            json_content = json_file.read()
-                            conversation_data = json.loads(json_content)
+            return result
+        except Exception as e:
+            error_df = pd.DataFrame(
+                [f"Extrahierung fehlgeschlagen - {behavior_name}, {type(e).__name__}: {str(e)}"],
+                columns=[str(behavior_name)],
+            )
+            return error_df
 
-                            # Only process valid message files with participants
-                            if (
-                                "participants" in conversation_data
-                                and len(conversation_data["participants"]) > 1
-                                and "messages" in conversation_data
-                            ):
-                                # User is typically the second participant
-                                user_name = conversation_data["participants"][1]["name"]
-
-                                # Extract outgoing messages
-                                for message in conversation_data["messages"]:
-                                    if (
-                                        message.get("sender_name") == user_name
-                                        and "timestamp_ms" in message
-                                    ):
-                                        # Add to combined messages
-                                        all_messages_data["combined_messages"].append(
-                                            {
-                                                "timestamp_ms": message["timestamp_ms"],
-                                                "sender_name": "user1",  # Anonymize
-                                                "conversation": message_file.split("/")[
-                                                    -2
-                                                ],  # Get conversation ID
-                                            }
-                                        )
-                    except Exception as e:
-                        print(f"Error reading message file {message_file}: {e}")
-                        continue
-
-                return all_messages_data, "message_1.json"
-
-            # Special handling for time_spent and session_frequency which need posts_viewed and/or videos_watched
-            if file_key == "time_spent" or file_key == "session_frequency":
-                # We need to load either or both files
-                posts_viewed_data = None
-                videos_watched_data = None
-
-                # Find and load posts_viewed.json
-                for file_name in file_names:
-                    if file_name.endswith(".json") and "posts_viewed" in file_name:
-                        try:
-                            with zip_ref.open(file_name) as json_file:
-                                json_content = json_file.read()
-                                posts_viewed_data = json.loads(json_content)
-                                break
-                        except Exception as e:
-                            print(f"Error reading posts_viewed file {file_name}: {e}")
-
-                # Find and load videos_watched.json
-                for file_name in file_names:
-                    if file_name.endswith(".json") and "videos_watched" in file_name:
-                        try:
-                            with zip_ref.open(file_name) as json_file:
-                                json_content = json_file.read()
-                                videos_watched_data = json.loads(json_content)
-                                break
-                        except Exception as e:
-                            print(f"Error reading videos_watched file {file_name}: {e}")
-
-                # Combine the data for the extraction function - work with either or both files
-                if posts_viewed_data or videos_watched_data:
-                    combined_data = {
-                        "posts_viewed": posts_viewed_data or {},
-                        "videos_watched": videos_watched_data or {},
-                    }
-                    return combined_data, "combined_viewing_data"
-                else:
-                    print("Could not find posts_viewed or videos_watched files")
-                    return None, "combined_viewing_data"
-
-            # Special handling for combined_views (posts + videos)
-            if file_key == "combined_views":
-                posts_viewed_data = None
-                videos_watched_data = None
-
-                # Find and load posts_viewed.json
-                for file_name in file_names:
-                    if file_name.endswith(".json") and "posts_viewed" in file_name:
-                        try:
-                            with zip_ref.open(file_name) as json_file:
-                                json_content = json_file.read()
-                                posts_viewed_data = json.loads(json_content)
-                                break
-                        except Exception as e:
-                            print(f"Error reading posts_viewed file {file_name}: {e}")
-
-                # Find and load videos_watched.json
-                for file_name in file_names:
-                    if file_name.endswith(".json") and "videos_watched" in file_name:
-                        try:
-                            with zip_ref.open(file_name) as json_file:
-                                json_content = json_file.read()
-                                videos_watched_data = json.loads(json_content)
-                                break
-                        except Exception as e:
-                            print(f"Error reading videos_watched file {file_name}: {e}")
-
-                # Combine the data
-                if posts_viewed_data or videos_watched_data:
-                    combined_data = {
-                        "posts_viewed": posts_viewed_data or {},
-                        "videos_watched": videos_watched_data or {},
-                    }
-                    return combined_data, "combined_views"
-                else:
-                    print("Could not find posts_viewed or videos_watched files")
-                    return None, "combined_views"
-
-            # Special handling for combined_blocks (blocked + restricted profiles)
-            if file_key == "combined_blocks":
-                blocked_data = None
-                restricted_data = None
-
-                # Find and load blocked_profiles.json
-                for file_name in file_names:
-                    if file_name.endswith(".json") and "blocked_profiles" in file_name:
-                        try:
-                            with zip_ref.open(file_name) as json_file:
-                                json_content = json_file.read()
-                                blocked_data = json.loads(json_content)
-                                break
-                        except Exception as e:
-                            print(f"Error reading blocked_profiles file {file_name}: {e}")
-
-                # Find and load restricted_profiles.json
-                for file_name in file_names:
-                    if file_name.endswith(".json") and "restricted_profiles" in file_name:
-                        try:
-                            with zip_ref.open(file_name) as json_file:
-                                json_content = json_file.read()
-                                restricted_data = json.loads(json_content)
-                                break
-                        except Exception as e:
-                            print(f"Error reading restricted_profiles file {file_name}: {e}")
-
-                # Combine the data
-                if blocked_data or restricted_data:
-                    combined_data = {
-                        "blocked_profiles": blocked_data or {},
-                        "restricted_profiles": restricted_data or {},
-                    }
-                    return combined_data, "combined_blocks"
-                else:
-                    print("Could not find blocked_profiles or restricted_profiles files")
-                    return None, "combined_blocks"
-
-            # Special handling for combined_comments (post + reel comments)
-            if file_key == "combined_comments":
-                post_comments_data = None
-                reel_comments_data = None
-
-                # Find and load post_comments.json
-                for file_name in file_names:
-                    if file_name.endswith(".json") and "post_comments_1" in file_name:
-                        try:
-                            with zip_ref.open(file_name) as json_file:
-                                json_content = json_file.read()
-                                post_comments_data = json.loads(json_content)
-                                break
-                        except Exception as e:
-                            print(f"Error reading post_comments file {file_name}: {e}")
-
-                # Find and load reels_comments.json
-                for file_name in file_names:
-                    if file_name.endswith(".json") and "reels_comments" in file_name:
-                        try:
-                            with zip_ref.open(file_name) as json_file:
-                                json_content = json_file.read()
-                                reel_comments_data = json.loads(json_content)
-                                break
-                        except Exception as e:
-                            print(f"Error reading reels_comments file {file_name}: {e}")
-
-                # Combine the data
-                if post_comments_data or reel_comments_data:
-                    combined_data = {
-                        "post_comments": post_comments_data or {},
-                        "reel_comments": reel_comments_data or {},
-                    }
-                    return combined_data, "combined_comments"
-                else:
-                    print("Could not find post_comments or reels_comments files")
-                    return None, "combined_comments"
-
-            # Special handling for combined_likes (posts + stories + comments)
-            if file_key == "combined_likes":
-                posts_liked_data = None
-                stories_liked_data = None
-                comments_liked_data = None
-
-                # Find and load liked_posts.json
-                for file_name in file_names:
-                    if file_name.endswith(".json") and "liked_posts" in file_name:
-                        try:
-                            with zip_ref.open(file_name) as json_file:
-                                json_content = json_file.read()
-                                posts_liked_data = json.loads(json_content)
-                                break
-                        except Exception as e:
-                            print(f"Error reading liked_posts file {file_name}: {e}")
-
-                # Find and load story_likes.json
-                for file_name in file_names:
-                    if file_name.endswith(".json") and "story_likes" in file_name:
-                        try:
-                            with zip_ref.open(file_name) as json_file:
-                                json_content = json_file.read()
-                                stories_liked_data = json.loads(json_content)
-                                break
-                        except Exception as e:
-                            print(f"Error reading story_likes file {file_name}: {e}")
-
-                # Find and load liked_comments.json
-                for file_name in file_names:
-                    if file_name.endswith(".json") and "liked_comments" in file_name:
-                        try:
-                            with zip_ref.open(file_name) as json_file:
-                                json_content = json_file.read()
-                                comments_liked_data = json.loads(json_content)
-                                break
-                        except Exception as e:
-                            print(f"Error reading liked_comments file {file_name}: {e}")
-
-                # Combine the data
-                if posts_liked_data or stories_liked_data or comments_liked_data:
-                    combined_data = {
-                        "posts_liked": posts_liked_data or {},
-                        "stories_liked": stories_liked_data or {},
-                        "comments_liked": comments_liked_data or {},
-                    }
-                    return combined_data, "combined_likes"
-                else:
-                    print("Could not find liked_posts, story_likes, or liked_comments files")
-                    return None, "combined_likes"
-
-            # Special handling for combined_story_interactions (all story interactions)
-            if file_key == "combined_story_interactions":
-                countdowns_data = None
-                emoji_sliders_data = None
-                polls_data = None
-                questions_data = None
-                quizzes_data = None
-
-                # Find and load all story interaction files
-                interaction_types = ["countdowns", "emoji_sliders", "polls", "questions", "quizzes"]
-                for interaction_type in interaction_types:
-                    for file_name in file_names:
-                        if file_name.endswith(".json") and interaction_type in file_name:
-                            try:
-                                with zip_ref.open(file_name) as json_file:
-                                    json_content = json_file.read()
-                                    data = json.loads(json_content)
-                                    if interaction_type == "countdowns":
-                                        countdowns_data = data
-                                    elif interaction_type == "emoji_sliders":
-                                        emoji_sliders_data = data
-                                    elif interaction_type == "polls":
-                                        polls_data = data
-                                    elif interaction_type == "questions":
-                                        questions_data = data
-                                    elif interaction_type == "quizzes":
-                                        quizzes_data = data
-                                    break
-                            except Exception as e:
-                                print(f"Error reading {interaction_type} file {file_name}: {e}")
-
-                # Combine the data
-                if any([countdowns_data, emoji_sliders_data, polls_data, questions_data, quizzes_data]):
-                    combined_data = {
-                        "countdowns": countdowns_data or {},
-                        "emoji_sliders": emoji_sliders_data or {},
-                        "polls": polls_data or {},
-                        "questions": questions_data or {},
-                        "quizzes": quizzes_data or {},
-                    }
-                    return combined_data, "combined_story_interactions"
-                else:
-                    print("Could not find any story interaction files")
-                    return None, "combined_story_interactions"
-
-             # Regular handling for search history
-            if file_key == "search_history":
-                for file_name in file_names:
-                    if (
-                        file_name.endswith(".json")
-                        and "word_or_phrase_searches" in file_name
-                    ):
-                        try:
-                            with zip_ref.open(file_name) as json_file:
-                                json_content = json_file.read()
-                                data = json.loads(json_content)
-                                return data, "word_or_phrase_searches"
-                        except Exception as e:
-                            print(f"Error reading search file {file_name}: {e}")
-
-            # Regular handling for other files
-            for pattern in patterns:
-                for file_name in file_names:
-                    if file_name.endswith(".json") and pattern in file_name:
-                        try:
-                            # Read the JSON file
-                            with zip_ref.open(file_name) as json_file:
-                                json_content = json_file.read()
-                                data = json.loads(json_content)
-                                return data, pattern
-                        except Exception as e:
-                            print(f"Error reading file {file_name}: {e}")
-                            continue  # Try the next matching file if there's an error
-
-            # If we've checked all files and found no match
-            print(f"No file matching pattern '{patterns}' found for key '{file_key}'")
-            return None, None
-
+    except ImportError as e:
+        error_df = pd.DataFrame(
+            [f"Behavior '{behavior_name}' nicht gefunden: {str(e)}"],
+            columns=["Fehler"],
+        )
+        return error_df
     except Exception as e:
-        print(f"Error extracting Instagram content: {e}")
-        return None, None
+        error_df = pd.DataFrame(
+            [f"Unerwarteter Fehler für '{behavior_name}': {str(e)}"],
+            columns=["Fehler"],
+        )
+        return error_df
 
+
+def get_behavior_info(behavior_name):
+    """
+    Get metadata (title, patterns, etc.) for a specific behavior.
+
+    Parameters:
+    - behavior_name: Name of the behavior (e.g., 'login_activity', 'time_spent')
+
+    Returns:
+    - Dictionary with behavior metadata or None if behavior not found
+    """
+    try:
+        # Dynamically import the behavior module
+        behavior_module = importlib.import_module(f'port.behaviors.{behavior_name}')
+
+        return {
+            'title': behavior_module.title,
+            'patterns': behavior_module.patterns,
+        }
+    except ImportError:
+        return None
+    except Exception:
+        return None
+
+
+def prompt_consent(data, behaviors_list):
+    """
+    Consent prompting function that works with the new behavior system.
+    This is a generator function that properly yields like the original prompt_consent.
+    """
+    description = props.PropsUIPromptText(
+        text=props.Translatable(
+            {
+                "de": "Bitte überprüfen Sie Ihre Daten unten. Verwenden Sie die Suchfelder, um bestimmte Informationen zu finden. Sie können alle Daten entfernen, die Sie nicht teilen möchten. Vielen Dank für Ihre Unterstützung dieses Forschungsprojekts!",
+            }
+        )
+    )
+
+    # Initialize lists to store data
+    binary_data = []
+    table_list = []
+
+    if data is not None:
+        for i, behavior_name in enumerate(behaviors_list):
+            df = data[i]
+
+            # Get behavior info from the behavior file
+            behavior_info = get_behavior_info(behavior_name)
+            if behavior_info is None:
+                # Fallback if behavior info cannot be retrieved
+                behavior_title = {"de": f"Unbekanntes Verhalten: {behavior_name}"}
+            else:
+                behavior_title = {"de": behavior_info['title']["de"]}
+
+            # Clean DataFrame for JSON serialization
+            df_cleaned = df.copy()
+
+            # Convert all columns to string to avoid serialization issues
+            for col in df_cleaned.columns:
+                df_cleaned[col] = df_cleaned[col].fillna('').astype(str)
+
+            df = df_cleaned
+
+            # Check if the dataframe has only one row
+            if len(df) == 1:
+                # Extract the title from the translation
+                translated_title = behavior_title["de"]
+                # Combine values from all columns into a single string
+                combined_value = " | ".join(
+                    [f"{col}: {df.iloc[0][col]}" for col in df.columns]
+                )
+                binary_data.append([translated_title, combined_value])
+            else:
+                # Directly add multi-row dataframes to the table list
+                table = props.PropsUIPromptConsentFormTable(
+                    behavior_name,
+                    i,
+                    props.Translatable(behavior_title),
+                    props.Translatable(behavior_title),  # Using title as description for now
+                    df,
+                )
+                table_list.append(table)
+
+        # Create a dataframe for binary data if there are any single-row entries
+        if binary_data:
+            binary_df = pd.DataFrame(binary_data, columns=["Kategorie", "Daten"])
+            table = props.PropsUIPromptConsentFormTable(
+                "binary_results",
+                99,
+                props.Translatable(
+                    {
+                        "de": "Einzelne Informationen",
+                    }
+                ),
+                props.Translatable(
+                    {
+                        "de": "Übersicht, wo wenig oder keine Instagram-Informationen vorliegen",
+                    }
+                ),
+                binary_df,
+            )
+            table_list.append(table)
+
+    # Construct and render the final consent page
+    consent_items = []
+    consent_items.append(description)
+    consent_items.extend(table_list)
+
+    donation_buttons = props.PropsUIDataSubmissionButtons(
+        donate_question=props.Translatable(
+            {
+                "de": "Möchten Sie die obenstehenden Daten spenden?",
+            }
+        ),
+        donate_button=props.Translatable(
+            {
+                "de": "Ja, spenden",
+            }
+        ),
+    )
+    consent_items.append(donation_buttons)
+
+    result = yield render_data_submission_page(
+        [item for item in consent_items if item is not None]
+    )
+
+    return result
+
+
+############################
+# RENDER PAGES AND PROMPT MESSAGES
+############################
 
 def render_data_submission_page(body):
     header = props.PropsUIHeader(
@@ -607,100 +436,6 @@ def prompt_extraction_message(message, percentage):
     )
 
     return props.PropsUIPromptProgress(description, message, percentage)
-
-
-def prompt_consent(data):
-    description = props.PropsUIPromptText(
-        text=props.Translatable(
-            {
-                "de": "Bitte überprüfen Sie Ihre Daten unten. Verwenden Sie die Suchfelder, um bestimmte Informationen zu finden. Sie können alle Daten entfernen, die Sie nicht teilen möchten. Vielen Dank für Ihre Unterstützung dieses Forschungsprojekts!",
-            }
-        )
-    )
-
-    # Initialize lists to store data
-    binary_data = []
-    table_list = []
-
-    if data is not None:  # can happen if user submits wrong file and still continues
-        for i, (file, entry_description) in enumerate(extraction_dict.items()):
-            df = data[i]
-
-            # Clean DataFrame for JSON serialization
-            df_cleaned = df.copy()
-
-            # Convert all columns to string to avoid serialization issues
-            for col in df_cleaned.columns:
-                # Convert NaN to empty string, other values to string
-                df_cleaned[col] = df_cleaned[col].fillna('').astype(str)
-
-            df = df_cleaned
-
-            # Check if the dataframe has only one row
-            if len(df) == 1:
-                # Extract the title from the translation
-                translated_title = entry_description["title"]["de"]
-                # Combine values from all columns into a single string
-                combined_value = " | ".join(
-                    [f"{col}: {df.iloc[0][col]}" for col in df.columns]
-                )
-                binary_data.append([translated_title, combined_value])
-            else:
-                # Directly add multi-row dataframes to the table list
-                table = props.PropsUIPromptConsentFormTable(
-                    file,
-                    i,
-                    props.Translatable(entry_description["title"]),
-                    props.Translatable(entry_description.get("description", entry_description["title"])),
-                    df,
-                )
-                table_list.append(table)
-
-        # Create a dataframe for binary data if there are any single-row entries
-        if binary_data:
-            binary_df = pd.DataFrame(binary_data, columns=["Kategorie", "Daten"])
-            table = props.PropsUIPromptConsentFormTable(
-                "binary_results",
-                99,
-                props.Translatable(
-                    {
-                        "de": "Einzelne Informationen",
-                    }
-                ),
-                props.Translatable(
-                    {
-                        "de": "Übersicht, wo wenig oder keine Instagram-Informationen vorliegen",
-                    }
-                ),
-                binary_df,
-            )
-            table_list.append(table)
-
-    # Construct and render the final consent page
-    consent_items = []
-
-    consent_items.append(description)
-    consent_items.extend(table_list)
-
-    donation_buttons = props.PropsUIDataSubmissionButtons(
-        donate_question=props.Translatable(
-            {
-                "de": "Möchten Sie die obenstehenden Daten spenden?",
-            }
-        ),
-        donate_button=props.Translatable(
-            {
-                "de": "Ja, spenden",
-            }
-        ),
-    )
-    consent_items.append(donation_buttons)
-
-    result = yield render_data_submission_page(
-        [item for item in consent_items if item is not None]
-    )
-
-    return result
 
 
 def donate(key, json_string):
