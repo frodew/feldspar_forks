@@ -245,14 +245,14 @@ def prompt_consent(data, behaviors_list):
     description = props.PropsUIPromptText(
         text=props.Translatable(
             {
-                "de": "Bitte überprüfen Sie Ihre Daten unten. Verwenden Sie die Suchfelder, um bestimmte Informationen zu finden. Sie können alle Daten entfernen, die Sie nicht teilen möchten. Vielen Dank für Ihre Unterstützung dieses Forschungsprojekts!",
+                "de": "Hier finden Sie nun alle Daten, die Sie an uns spenden können. Wenn Sie bestimmte Daten nicht spenden wollen, können Sie diese löschen oder anpassen."
             }
         )
     )
 
     # Initialize lists to store data
-    binary_data = []
-    table_list = []
+    misc_data = []
+    table_data_list = []
 
     if data is not None:
         for i, behavior_name in enumerate(behaviors_list):
@@ -283,37 +283,45 @@ def prompt_consent(data, behaviors_list):
                 combined_value = " | ".join(
                     [f"{col}: {df.iloc[0][col]}" for col in df.columns]
                 )
-                binary_data.append([translated_title, combined_value])
+                misc_data.append([translated_title, combined_value])
             else:
-                # Directly add multi-row dataframes to the table list
-                table = props.PropsUIPromptConsentFormTable(
-                    behavior_name,
-                    i,
-                    props.Translatable(behavior_title),
-                    props.Translatable(behavior_title),  # Using title as description for now
-                    df,
-                )
-                table_list.append(table)
+                # Store table data for later creation with correct numbering
+                table_data_list.append({
+                    'behavior_name': behavior_name,
+                    'title': behavior_title,
+                    'df': df
+                })
 
-        # Create a dataframe for binary data if there are any single-row entries
-        if binary_data:
-            binary_df = pd.DataFrame(binary_data, columns=["Kategorie", "Daten"])
+        # Add misc_data table data if there are any single-row entries
+        if misc_data:
+            misc_df = pd.DataFrame(misc_data, columns=["Kategorie", "Daten"])
+            table_data_list.append({
+                'behavior_name': "misc_data",
+                'title': {"de": "Einzelne Informationen"},
+                'description': {"de": "Übersicht, wo wenig oder keine Informationen vorliegen"},
+                'df': misc_df
+            })
+
+    # Create all tables with correct sequential numbering
+    table_list = []
+    for i, table_data in enumerate(table_data_list, start=1):
+        if table_data['behavior_name'] == "misc_data":
             table = props.PropsUIPromptConsentFormTable(
-                "binary_results",
-                99,
-                props.Translatable(
-                    {
-                        "de": "Einzelne Informationen",
-                    }
-                ),
-                props.Translatable(
-                    {
-                        "de": "Übersicht, wo wenig oder keine Instagram-Informationen vorliegen",
-                    }
-                ),
-                binary_df,
+                table_data['behavior_name'],
+                i,
+                props.Translatable(table_data['title']),
+                props.Translatable(table_data['description']),
+                table_data['df'],
             )
-            table_list.append(table)
+        else:
+            table = props.PropsUIPromptConsentFormTable(
+                table_data['behavior_name'],
+                i,
+                props.Translatable(table_data['title']),
+                props.Translatable(table_data['title']),  # Using title as description for now
+                table_data['df'],
+            )
+        table_list.append(table)
 
     # Construct and render the final consent page
     consent_items = []
@@ -323,12 +331,12 @@ def prompt_consent(data, behaviors_list):
     donation_buttons = props.PropsUIDataSubmissionButtons(
         donate_question=props.Translatable(
             {
-                "de": "Möchten Sie die obenstehenden Daten spenden?",
+                "de": "Möchten Sie die obenstehenden Daten spenden?"
             }
         ),
         donate_button=props.Translatable(
             {
-                "de": "Ja, spenden",
+                "de": "Ja, spenden"
             }
         ),
     )
@@ -349,7 +357,7 @@ def render_data_submission_page(body):
     header = props.PropsUIHeader(
         props.Translatable(
             {
-                "de": "Instagram Datenspende",
+                "de": "Instagram Datenspende"
             }
         )
     )
@@ -363,12 +371,12 @@ def render_data_submission_page(body):
 def retry_confirmation():
     text = props.Translatable(
         {
-            "de": "Leider können wir Ihre Datei nicht bearbeiten. Fahren Sie fort, wenn Sie sicher sind, dass Sie die richtige Datei ausgewählt haben. Versuchen Sie, eine andere Datei auszuwählen.",
+            "de": "Leider können wir Ihre Datei nicht bearbeiten. Fahren Sie fort, wenn Sie sicher sind, dass Sie die richtige Datei ausgewählt haben. Versuchen Sie, eine andere Datei auszuwählen."
         }
     )
     ok = props.Translatable(
         {
-            "de": "Erneut versuchen",
+            "de": "Erneut versuchen"
         }
     )
     cancel = props.Translatable(
@@ -419,7 +427,7 @@ def retry_confirmation_no_ddp():
 def prompt_file(extensions):
     description = props.Translatable(
         {
-            "de": "Bitte wählen Sie eine ZIP-Datei auf Ihrem Gerät aus.",
+            "de": "Bitte wählen Sie eine ZIP-Datei auf Ihrem Gerät aus."
         }
     )
 
@@ -431,7 +439,7 @@ def prompt_file(extensions):
 def prompt_extraction_message(message, percentage):
     description = props.Translatable(
         {
-            "de": "Einen Moment bitte. Es werden nun Informationen aus der ausgewählten Datei extrahiert.",
+            "de": "Einen Moment bitte. Es werden nun Informationen aus der ausgewählten Datei extrahiert."
         }
     )
 
