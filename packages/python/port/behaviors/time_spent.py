@@ -16,7 +16,7 @@ title = {
 def extract_time_spent(zip_file_path):
     """
     Calculate the total time spent on Instagram per day.
-    A session continues if the time between views is less than 60 seconds.
+    A session continues if the time between views is less than 180 seconds.
     Sessions reset at midnight.
 
     Works with either posts_viewed, videos_watched, or both.
@@ -30,7 +30,7 @@ def extract_time_spent(zip_file_path):
 
     # Constants
     SESSION_BREAK_THRESHOLD = 180  # seconds
-    DEFAULT_ACTIVITY_TIME = 30  # seconds for the last activity in a session
+    DEFAULT_ACTIVITY_TIME = 20  # seconds for the last activity in a session
 
     # Extract data from the combined format
     posts_viewed_json = combined_data.get("posts_viewed", {})
