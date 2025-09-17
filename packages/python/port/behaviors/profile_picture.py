@@ -6,7 +6,7 @@ patterns = ["profile_photos"]
 
 # Title used in prompt_consent() to describe this behavior
 title = {
-    "de": "Verwenden Sie ein Gesicht in ihrem Profilfoto?",
+    "de": "Ist auf Ihrem Profilfoto ein Gesicht sichtbar?",
 }
 
 def extract_profile_picture(zip_file_path):

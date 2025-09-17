@@ -6,7 +6,7 @@ patterns = ["stories"]
 
 # Title used in prompt_consent() to describe this behavior
 title = {
-    "de": "Wie oft haben Sie Stories veröffentlicht und haben Sie Standortinformationen hinzugefügt? [pro Tag]",
+    "de": "Wie oft haben Sie Stories veröffentlicht, haben Sie Standortinformationen hinzugefügt und ist ein Gesicht sichtbar?",
 }
 
 def extract_stories_created(zip_file_path):

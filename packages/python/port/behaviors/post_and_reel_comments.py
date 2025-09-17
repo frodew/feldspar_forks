@@ -2,11 +2,11 @@ from port.extraction_helpers import epoch_to_date, extract_multiple_files_from_z
 import pandas as pd
 
 # Patterns to find the relevant files for this behavior
-patterns = ["post_comments_1", "reels_comments"]
+patterns = ["post_comments_1", "reels_comments", "hype"]
 
 # Title used in prompt_consent() to describe this behavior
 title = {
-    "de": "Wie oft haben Sie Posts und Reels kommentiert? [pro Tag]",
+    "de": "Wie oft haben Sie Posts, Reels und Stories kommentiert? [pro Tag]",
 }
 
 def extract_post_comments(post_comments_json):
@@ -48,13 +48,30 @@ def extract_reel_comments(reel_comments_json):
     return aggregated_df.reset_index(name="Anzahl")
 
 
+def extract_story_comments(story_comments_json):
+    """extract your_instagram_activity/comments/story_comments -> count per day"""
+
+    dates = [
+        epoch_to_date(t["string_map_data"]["Time"]["timestamp"])
+        for t in story_comments_json["comments_story_comments"]
+    ]  # get list with timestamps in epoch format
+    dates_df = pd.DataFrame(dates, columns=["Datum"])  # convert to df
+
+    aggregated_df = dates_df.groupby(["Datum"])[
+        "Datum"
+    ].size()  # count number of rows per day
+
+    return aggregated_df.reset_index(name="Anzahl")
+
+
 def extract_post_and_reel_comments(zip_file_path):
-    """Extract and combine post comments and reel comments from ZIP file"""
+    """Extract and combine post comments, reel comments, and story comments from ZIP file"""
 
     # Map file patterns to expected keys in the data structure
     key_mapping = {
         "post_comments_1": "post_comments",
-        "reels_comments": "reel_comments"
+        "reels_comments": "reel_comments",
+        "hype": "story_comments"
     }
 
     # Extract data from ZIP file
@@ -85,6 +102,19 @@ def extract_post_and_reel_comments(zip_file_path):
                 combined_df = combined_df[["Datum", "Anzahl"]]
             else:
                 combined_df = reel_comments_df.rename(columns={reel_comments_df.columns[1]: "Anzahl"})
+
+    # Extract story comments if available
+    story_comments_data = combined_data.get("story_comments", {})
+    if story_comments_data:
+        story_comments_df = extract_story_comments(story_comments_data)
+        if not story_comments_df.empty:
+            if not combined_df.empty:
+                story_comments_df = story_comments_df.rename(columns={story_comments_df.columns[1]: "Anzahl"})
+                combined_df = pd.merge(combined_df, story_comments_df, on="Datum", how='outer', suffixes=('', '_story'))
+                combined_df["Anzahl"] = combined_df.filter(like="Anzahl").sum(axis=1, skipna=True).fillna(0).astype(int)
+                combined_df = combined_df[["Datum", "Anzahl"]]
+            else:
+                combined_df = story_comments_df.rename(columns={story_comments_df.columns[1]: "Anzahl"})
 
     if not combined_df.empty:
         combined_df = combined_df.sort_values(by="Datum").reset_index(drop=True)

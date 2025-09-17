@@ -6,7 +6,7 @@ patterns = ["media/reels.json"]
 
 # Title used in prompt_consent() to describe this behavior
 title = {
-    "de": "Wie oft haben Sie Reels veröffentlicht und wurden Gesichter erkannt?",
+    "de": "Wie oft haben Sie Reels veröffentlicht, haben Sie Standortinformationen hinzugefügt und ist ein Gesicht sichtbar?",
 }
 
 def extract_reels_created(zip_file_path):
@@ -34,10 +34,25 @@ def extract_reels_created(zip_file_path):
             image_uris.append(uri)
 
         date = epoch_to_date(media_item.get("creation_timestamp", ""))
+        has_latitude_data = any(
+            "latitude" in exif_data
+            for exif_data in media_item.get("media_metadata", {})
+            .get("video_metadata", {})
+            .get("exif_data", [])
+        )
+
+        # Handle dummy value conversion for location
+        if has_latitude_data in [True, "True"]:
+            location_value = "Ja"
+        elif has_latitude_data in [False, "False"]:
+            location_value = "Nein"
+        else:
+            location_value = str(has_latitude_data)
 
         results.append(
             {
                 "Datum": date,
+                "Standortinformationen geteilt": location_value,
                 "uri": uri,
             }
         )
