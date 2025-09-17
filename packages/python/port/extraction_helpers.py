@@ -2,6 +2,10 @@ from port.api.assets import *
 from port.api.props import Translatable
 import pandas as pd
 from datetime import datetime, timezone, timedelta
+import zipfile
+import cv2
+import numpy as np
+import time
 
 
 def epoch_to_date(epoch_timestamp: str | int) -> str:
@@ -102,3 +106,89 @@ def extract_multiple_files_from_zip(zip_file_path, patterns, key_mapping=None):
     except Exception as e:
         print(f"Error extracting multiple files from ZIP: {e}")
         return None
+
+def detect_faces_in_images(zip_file_path, image_uris):
+    """
+    Detect faces in images from a ZIP file with improved accuracy.
+
+    Uses OpenCV-only implementation with optimized single-pass detection for improved accuracy.
+
+    Dependency reduction: Removed PIL dependency, now uses only OpenCV for image processing.
+
+    Args:
+        zip_file_path: Path to the ZIP file
+        image_uris: List of image URIs to analyze
+
+    Returns:
+        Dictionary mapping URIs to True/False based on face detection
+    """
+    face_dict = {}
+
+    # Load face cascade classifier
+    try:
+        face_cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        )
+    except Exception as e:
+        print(f"Error loading face cascade classifier: {e}")
+        # Return False for all images if classifier can't be loaded
+        return {uri: False for uri in image_uris}
+
+    # Set the desired size for the images
+    target_width, target_height = 300, 300
+
+    try:
+        with zipfile.ZipFile(zip_file_path, "r") as zip_ref:
+            for uri in image_uris:
+                try:
+                    # Check if the file exists in the zip and is a jpg image
+                    if uri.lower().endswith(".jpg") and uri in zip_ref.namelist():
+                        # Open the image file within the zip file
+                        with zip_ref.open(uri) as img_file:
+                            start_time = time.time()  # Record start time
+
+                            # Load the image from bytes using OpenCV
+                            img_data = img_file.read()
+                            img_array = np.frombuffer(img_data, np.uint8)
+                            img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
+                            if img is None:
+                                face_dict[uri] = False
+                                continue
+
+                            # Convert to grayscale using OpenCV
+                            img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+                            # Resize the image using OpenCV
+                            img_down_np = cv2.resize(img_gray, (target_width, target_height), interpolation=cv2.INTER_LANCZOS4)
+
+                            # Single optimized detection pass
+                            faces = face_cascade.detectMultiScale(
+                                img_down_np, scaleFactor=1.08, minNeighbors=3, minSize=(18, 18)
+                            )
+
+                            end_time = time.time()  # Record end time
+                            processing_time = end_time - start_time  # Calculate processing time
+                            print(
+                                "Processing time for {}: {:.2f} seconds".format(
+                                    uri, processing_time
+                                )
+                            )
+
+                            # Set result based on face detection
+                            face_dict[uri] = len(faces) > 0
+
+                    else:
+                        # Image not found or not a jpg file
+                        face_dict[uri] = False
+
+                except Exception as e:
+                    print(f"Error processing image {uri}: {e}")
+                    face_dict[uri] = False
+
+    except Exception as e:
+        print(f"Error opening ZIP file for face detection: {e}")
+        # Return False for all images if ZIP can't be opened
+        return {uri: False for uri in image_uris}
+
+    return face_dict

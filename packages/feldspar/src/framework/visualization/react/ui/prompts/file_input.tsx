@@ -121,7 +121,7 @@ const note = (): Translatable => {
 const placeholder = (): Translatable => {
   return new TextBundle()
     .add('en', 'E.g. data.zip')
-    .add('de', 'instagram-....zip')
+    .add('de', 'instagram- ... .zip')
     .add('it', 'Esempio: data.zip')
     .add('es', 'Ejemplo: data.zip')
     .add('nl', 'Voorbeeld: data.zip')

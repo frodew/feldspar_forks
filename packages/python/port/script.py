@@ -45,6 +45,8 @@ def process(sessionId):
                   'contact_syncing',
                   'email_address',
                   'phone_number',
+                  'gender',
+                  'profile_picture',
                   'private_account',
                   'paid_subscription',
                   'topic_interests',
@@ -56,9 +58,15 @@ def process(sessionId):
 
               for index, behavior_name in enumerate(behaviors_to_extract, start=1):
                   percentage = (index / len(behaviors_to_extract)) * 100
-                  promptMessage = prompt_extraction_message(
-                      f"Extracting behavior: {behavior_name}", percentage
-                  )
+
+                  # Check if this behavior processes images and show add
+                  image_processing_behaviors = ['posts_created', 'stories_created', 'reels_created']
+                  if behavior_name in image_processing_behaviors:
+                      message = f"Verarbeitet Datei: {behavior_name} (Verarbeitung kann je nach Anzahl der Inhalte länger dauern)"
+                  else:
+                      message = f"Verarbeitet Datei: {behavior_name}"
+
+                  promptMessage = prompt_extraction_message(message, percentage)
                   yield render_data_submission_page(promptMessage)
 
                   result = extract_behavior(behavior_name, fileResult.value)
@@ -86,16 +94,7 @@ def process(sessionId):
                 if retry_result.__type__ == "PayloadTrue":
                     continue
 
-            elif check_ddp == "invalid_no_ddp":
-                # Use platform-specific error messages
-                retry_result = yield render_data_submission_page(
-                    retry_confirmation_no_ddp()
-                )
-
-                if retry_result.__type__ == "PayloadTrue":
-                    continue
-
-            else:
+            else: # also for invalid_no_ddp
                 retry_result = yield render_data_submission_page(
                     retry_confirmation()
                 )
@@ -161,6 +160,65 @@ def check_if_valid_instagram_ddp(filename):
     except Exception as e:
         print(f"An error occurred: {e}")
         return "invalid_file_error"
+
+def extract_behavior_with_progress(behavior_name, zip_file_path, base_percentage, behavior_weight):
+    """
+    Extract data for image processing behaviors with progress updates.
+
+    Yields progress updates and final result.
+    """
+    try:
+        # Dynamically import the behavior module
+        behavior_module = importlib.import_module(f'port.behaviors.{behavior_name}')
+        extraction_function = getattr(behavior_module, f'extract_{behavior_name}')
+
+        # Create progress callback
+        def progress_callback(image_progress):
+            total_percentage = base_percentage + (image_progress / 100) * behavior_weight
+            message = f"Verarbeitet Datei: {behavior_name} ({image_progress:.0f}% Bilder verarbeitet)"
+            promptMessage = prompt_extraction_message(message, total_percentage)
+            return {
+                'type': 'progress',
+                'ui': promptMessage
+            }
+
+        # Call extraction with progress callback
+        try:
+            result = extraction_function(zip_file_path, progress_callback=progress_callback)
+
+            # Yield any progress updates that were generated
+            if hasattr(progress_callback, '_updates'):
+                for update in progress_callback._updates:
+                    yield update
+
+            # Handle None return (missing files)
+            if result is None:
+                result = pd.DataFrame(
+                    [f'(Datei "{behavior_name}" fehlt)'],
+                    columns=["Keine Informationen"],
+                )
+
+            yield {'type': 'result', 'data': result}
+
+        except Exception as e:
+            error_df = pd.DataFrame(
+                [f"Extrahierung fehlgeschlagen - {behavior_name}, {type(e).__name__}: {str(e)}"],
+                columns=[str(behavior_name)],
+            )
+            yield {'type': 'result', 'data': error_df}
+
+    except ImportError as e:
+        error_df = pd.DataFrame(
+            [f"Behavior '{behavior_name}' nicht gefunden: {str(e)}"],
+            columns=["Fehler"],
+        )
+        yield {'type': 'result', 'data': error_df}
+    except Exception as e:
+        error_df = pd.DataFrame(
+            [f"Unerwarteter Fehler für '{behavior_name}': {str(e)}"],
+            columns=["Fehler"],
+        )
+        yield {'type': 'result', 'data': error_df}
 
 def extract_behavior(behavior_name, zip_file_path):
     """
@@ -371,7 +429,7 @@ def render_data_submission_page(body):
 def retry_confirmation():
     text = props.Translatable(
         {
-            "de": "Leider können wir Ihre Datei nicht bearbeiten. Fahren Sie fort, wenn Sie sicher sind, dass Sie die richtige Datei ausgewählt haben. Versuchen Sie, eine andere Datei auszuwählen."
+            "de": "Leider können wir Ihre Datei nicht bearbeiten. Sind Sie sicher, dass Sie Ihre heruntergeladenen Instagram-Daten ausgewählt haben?"
         }
     )
     ok = props.Translatable(
@@ -397,27 +455,10 @@ def retry_confirmation_no_json():
 
     return props.PropsUIPromptConfirm(text, ok)
 
-
-def retry_confirmation_no_ddp():
-    text = props.Translatable(
-        {
-            "de": f"Leider können wir Ihre Datei nicht verarbeiten. Haben Sie wirklich Ihre Instagram-Daten ausgewählt?"
-        }
-    )
-
-    ok = props.Translatable(
-        {"de": "Erneut versuchen"}
-    )
-
-    return props.PropsUIPromptConfirm(text, ok)
-
-
-
-
 def prompt_file(extensions):
     description = props.Translatable(
         {
-            "de": "Bitte wählen Sie eine ZIP-Datei auf Ihrem Gerät aus."
+            "de": "Bitte wählen Sie Ihre heruntergeladene Instagram ZIP-Datei aus."
         }
     )
 
