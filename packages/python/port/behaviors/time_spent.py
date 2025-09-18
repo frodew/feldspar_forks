@@ -66,6 +66,7 @@ def extract_time_spent(zip_file_path):
     from datetime import datetime
 
     daily_time_spent = {}
+    daily_first_timestamp = {}  # Store first timestamp for each day
     session_start_time = None
     last_time = None
     current_day = None
@@ -77,6 +78,7 @@ def extract_time_spent(zip_file_path):
         # Initialize the day in our dictionary if needed
         if new_day not in daily_time_spent:
             daily_time_spent[new_day] = 0
+            daily_first_timestamp[new_day] = ts  # Store first timestamp for this day
 
         # Check if we're starting a new session
         start_new_session = False
@@ -117,7 +119,7 @@ def extract_time_spent(zip_file_path):
 
     # Convert to DataFrame
     dates = [
-        epoch_to_date(int(datetime(d.year, d.month, d.day).timestamp()))
+        epoch_to_date(daily_first_timestamp[d])
         for d in daily_time_spent.keys()
     ]
     times = [round(t) for t in daily_time_spent.values()]  # Round to whole seconds
