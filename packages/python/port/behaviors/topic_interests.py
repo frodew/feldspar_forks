@@ -2,7 +2,7 @@ from port.extraction_helpers import extract_single_file_from_zip
 import pandas as pd
 
 # Patterns to find the relevant files for this behavior
-patterns = ["your_topics"]
+patterns = ["recommended_topics"]
 
 # Title used in prompt_consent() to describe this behavior
 title = {
