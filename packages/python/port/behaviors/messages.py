@@ -27,9 +27,10 @@ def extract_from_zip(zip_file_path):
             # Find all message files in the ZIP (look in both inbox and message_requests folders)
             message_files = []
             for name in file_names:
-                if name.endswith("message_1.json") and (
-                    "/inbox/" in name or "/message_requests/" in name
-                ):
+                if (name.endswith("message_1.json") and
+                    ("/inbox/" in name or "/message_requests/" in name) and
+                    not name.startswith("__MACOSX/") and
+                    "/._" not in name):
                     message_files.append(name)
 
             if not message_files:
