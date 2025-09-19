@@ -30,6 +30,7 @@ def process(sessionId):
 
               behaviors_to_extract = [
                   'time_spent',
+                  'session_count',
                   'ads_seen',
                   'ads_clicked',
                   'posts_and_videos_seen',
