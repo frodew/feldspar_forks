@@ -7,7 +7,7 @@ patterns = ["posts_viewed", "videos_watched"]
 
 # Title used in prompt_consent() to describe this behavior
 title = {
-    "de": "Wie waren Sie pro Tag auf Instagram? [pro Tag]",
+    "de": "Wie oft waren Sie pro Tag auf Instagram? [pro Tag]",
 }
 
 
@@ -27,7 +27,7 @@ def extract_session_count(zip_file_path):
         return None
 
     # Constants
-    SESSION_BREAK_THRESHOLD = 180  # seconds
+    SESSION_BREAK_THRESHOLD = 300  # seconds
 
     # Extract data from the combined format
     posts_viewed_json = combined_data.get("posts_viewed", {})

@@ -9,6 +9,7 @@ title = {
     "de": "Nutzen Sie Instagrams kostenpflichtige Abo-Option, mit der Ihnen keine Werbeinhalte angezeigt werden?",
 }
 
+
 def extract_paid_subscription(zip_file_path):
     """Extract paid subscription data from ZIP file -> dummy whether user has subscription for no ads"""
 
@@ -20,9 +21,9 @@ def extract_paid_subscription(zip_file_path):
 
     value = None
 
-    if subscription_json["label_values"][0]["value"] == "Inaktiv":
-        value = "Nein"
+    if subscription_json["label_values"][0]["value"]:
+        value = str(subscription_json["label_values"][0]["value"])
     else:
-        value = "Ja"
+        value = "Keine Information"
 
     return pd.DataFrame([value], columns=["Abo-Option für Werbefreiheit"])
