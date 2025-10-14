@@ -9,10 +9,14 @@ title = {
     "de": "Wie oft haben Sie Werbung angeklickt? [pro Tag]",
 }
 
+
 def extract_ads_clicked_data(ads_clicked_json):
     """Extract ads clicked data from ads_clicked JSON"""
 
-    if not ads_clicked_json or "impressions_history_ads_clicked" not in ads_clicked_json:
+    if (
+        not ads_clicked_json
+        or "impressions_history_ads_clicked" not in ads_clicked_json
+    ):
         return pd.DataFrame(columns=["Datum", "Angeklickte Werbung"])
 
     try:
@@ -21,7 +25,9 @@ def extract_ads_clicked_data(ads_clicked_json):
             for t in ads_clicked_json["impressions_history_ads_clicked"]
         ]  # get list with timestamps in epoch format
         dates = [epoch_to_date(t) for t in timestamps]  # convert epochs to dates
-        products = [i["title"] for i in ads_clicked_json["impressions_history_ads_clicked"]]
+        products = [
+            i["title"] for i in ads_clicked_json["impressions_history_ads_clicked"]
+        ]
 
         ads_clicked_df = pd.DataFrame({"Datum": dates, "Angeklickte Werbung": products})
         return ads_clicked_df
@@ -41,7 +47,11 @@ def extract_link_history_data(link_history_json):
         titles = []
 
         for entry in link_history_json:
-            if not isinstance(entry, dict) or "timestamp" not in entry or "label_values" not in entry:
+            if (
+                not isinstance(entry, dict)
+                or "timestamp" not in entry
+                or "label_values" not in entry
+            ):
                 continue
 
             # Extract timestamp and convert to date
@@ -53,13 +63,19 @@ def extract_link_history_data(link_history_json):
             if isinstance(label_values, list) and len(label_values) >= 2:
                 # Check if the website URL (first item) contains accountscenter.instagram.com
                 url_entry = label_values[0]
-                if isinstance(url_entry, dict) and url_entry.get("label") == "Website link you visited":
+                if (
+                    isinstance(url_entry, dict)
+                    and url_entry.get("label") == "Website link you visited"
+                ):
                     url_value = url_entry.get("value", "")
                     if "accountscenter.instagram.com" in url_value:
                         continue  # Skip this entry
 
                 title_entry = label_values[1]
-                if isinstance(title_entry, dict) and title_entry.get("label") == "Title of website page you visited":
+                if (
+                    isinstance(title_entry, dict)
+                    and title_entry.get("label") == "Title of website page you visited"
+                ):
                     title_value = title_entry.get("value", "")
                     if title_value:  # Only add non-empty titles
                         dates.append(date)
@@ -102,6 +118,8 @@ def extract_ads_clicked(zip_file_path):
         return None
 
     # Group by date and aggregate the clicked items into lists
-    aggregated_df = combined_df.groupby("Datum")["Angeklickte Werbung"].agg(list).reset_index()
+    aggregated_df = (
+        combined_df.groupby("Datum")["Angeklickte Werbung"].agg(list).reset_index()
+    )
 
     return aggregated_df

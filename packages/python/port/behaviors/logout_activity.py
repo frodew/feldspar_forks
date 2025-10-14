@@ -10,6 +10,7 @@ title = {
     "de": "Wann und mit welchem Gerät/Browser haben Sie sich bei Instagram abgemeldet?",
 }
 
+
 def extract_logout_activity(zip_file_path):
     """Extract logout activity data from ZIP file -> time and user agent"""
 
@@ -27,6 +28,8 @@ def extract_logout_activity(zip_file_path):
 
     user_agents = [t["string_map_data"]["User Agent"]["value"] for t in logouts]
 
-    logout_df = pd.DataFrame({"Datum": dates, "Uhrzeit": times, "Gerät/Browser": user_agents})
+    logout_df = pd.DataFrame(
+        {"Datum": dates, "Uhrzeit": times, "Gerät/Browser": user_agents}
+    )
 
     return logout_df

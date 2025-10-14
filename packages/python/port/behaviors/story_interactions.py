@@ -9,6 +9,7 @@ title = {
     "de": "Wie oft haben Sie mit Stories interagiert? [pro Tag]",
 }
 
+
 def extract_story_interaction_countdowns(story_interaction_countdowns_json):
     """extract your_instagram_activity/story_sticker_interactions/countdowns -> count per day"""
 
@@ -25,9 +26,7 @@ def extract_story_interaction_countdowns(story_interaction_countdowns_json):
     return aggregated_df.reset_index(name="Anzahl")
 
 
-def extract_story_interaction_emoji_sliders(
-    story_interaction_emoji_sliders_json
-):
+def extract_story_interaction_emoji_sliders(story_interaction_emoji_sliders_json):
     """extract your_instagram_activity/story_sticker_interactions/emoji_sliders -> count per day"""
 
     dates = [
@@ -109,7 +108,7 @@ def extract_story_interactions(zip_file_path):
         ("emoji_sliders", extract_story_interaction_emoji_sliders),
         ("polls", extract_story_interaction_polls),
         ("questions", extract_story_interaction_questions),
-        ("quizzes", extract_story_interaction_quizzes)
+        ("quizzes", extract_story_interaction_quizzes),
     ]
 
     # Process each type of story interaction
@@ -121,13 +120,20 @@ def extract_story_interactions(zip_file_path):
                 if combined_df.empty:
                     combined_df = df.rename(columns={df.columns[1]: "Anzahl"})
                 else:
-                    df = df.rename(columns={df.columns[1]: f"Anzahl_{interaction_type}"})
-                    combined_df = pd.merge(combined_df, df, on="Datum", how='outer')
+                    df = df.rename(
+                        columns={df.columns[1]: f"Anzahl_{interaction_type}"}
+                    )
+                    combined_df = pd.merge(combined_df, df, on="Datum", how="outer")
 
     # Sum up all interaction counts if we have multiple sources
     if not combined_df.empty and len(combined_df.columns) > 2:
         interaction_columns = [col for col in combined_df.columns if col != "Datum"]
-        combined_df["Anzahl"] = combined_df[interaction_columns].sum(axis=1, skipna=True).fillna(0).astype(int)
+        combined_df["Anzahl"] = (
+            combined_df[interaction_columns]
+            .sum(axis=1, skipna=True)
+            .fillna(0)
+            .astype(int)
+        )
         combined_df = combined_df[["Datum", "Anzahl"]]
 
     if not combined_df.empty:

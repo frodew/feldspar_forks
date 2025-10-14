@@ -1,4 +1,8 @@
-from port.extraction_helpers import epoch_to_date, extract_single_file_from_zip, detect_faces_in_images
+from port.extraction_helpers import (
+    epoch_to_date,
+    extract_single_file_from_zip,
+    detect_faces_in_images,
+)
 import pandas as pd
 
 # Patterns to find the relevant files for this behavior
@@ -8,6 +12,7 @@ patterns = ["media/reels.json"]
 title = {
     "de": "Wie oft haben Sie Reels veröffentlicht, haben Sie Standortinformationen hinzugefügt und ist ein Gesicht sichtbar?",
 }
+
 
 def extract_reels_created(zip_file_path):
     """Extract reels created data from ZIP file -> individual reels with face detection"""

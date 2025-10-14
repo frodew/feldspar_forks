@@ -9,6 +9,7 @@ title = {
     "de": "Haben Sie eine E-Mail-Adresse in Ihrem Profil?",
 }
 
+
 def extract_email_address(zip_file_path):
     """Extract email address data from ZIP file -> dummy whether user has email"""
 
@@ -24,7 +25,10 @@ def extract_email_address(zip_file_path):
     for k in ["Email", "E-Mail-Adresse"]:  # keys are language specific
         if k in personal_information_json["profile_user"][0]["string_map_data"]:
             email = (
-                personal_information_json["profile_user"][0]["string_map_data"][k]["value"] != "False"
+                personal_information_json["profile_user"][0]["string_map_data"][k][
+                    "value"
+                ]
+                != "False"
             )
             break
 

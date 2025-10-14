@@ -10,6 +10,7 @@ title = {
     "de": "Wann und mit welchem Gerät/Browser haben Sie sich bei Instagram angemeldet?",
 }
 
+
 def extract_login_activity(zip_file_path):
     """Extract login activity data from ZIP file -> time and user agent"""
 
@@ -27,6 +28,8 @@ def extract_login_activity(zip_file_path):
 
     user_agents = [t["string_map_data"]["User Agent"]["value"] for t in logins]
 
-    login_df = pd.DataFrame({"Datum": dates, "Uhrzeit": times, "Gerät/Browser": user_agents})
+    login_df = pd.DataFrame(
+        {"Datum": dates, "Uhrzeit": times, "Gerät/Browser": user_agents}
+    )
 
     return login_df

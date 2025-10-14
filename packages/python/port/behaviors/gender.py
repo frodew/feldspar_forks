@@ -9,6 +9,7 @@ title = {
     "de": "Haben Sie Ihr Geschlecht in Ihrem Profil angegeben?",
 }
 
+
 def extract_gender(zip_file_path):
     """Extract gender data from ZIP file -> dummy whether user has specified gender"""
 
@@ -23,7 +24,9 @@ def extract_gender(zip_file_path):
 
     for k in ["Gender", "Geschlecht"]:  # keys are language specific
         if k in personal_information_json["profile_user"][0]["string_map_data"]:
-            gender_value = personal_information_json["profile_user"][0]["string_map_data"][k]["value"]
+            gender_value = personal_information_json["profile_user"][0][
+                "string_map_data"
+            ][k]["value"]
             # Check if gender is specified and not "unspecified"
             if gender_value and gender_value.lower() != "unspecified":
                 gender_specified = True

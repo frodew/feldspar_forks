@@ -9,6 +9,7 @@ title = {
     "de": "Haben Sie die Kontaktsynchronisierung aktiviert?",
 }
 
+
 def extract_contact_syncing(zip_file_path):
     """Extract contact syncing data from ZIP file -> dummy whether 'contact_syncing' is enabled"""
 

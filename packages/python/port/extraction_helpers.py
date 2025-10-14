@@ -31,8 +31,6 @@ def epoch_to_date(epoch_timestamp: str | int) -> str:
     )  # convertion to string for display in browser
 
 
-
-
 def extract_single_file_from_zip(zip_file_path, pattern):
     """
     Extract a single JSON file from Instagram ZIP file based on pattern.
@@ -94,7 +92,9 @@ def extract_multiple_files_from_zip(zip_file_path, patterns, key_mapping=None):
                             print(f"Error reading {pattern} file {file_name}: {e}")
 
                 # Use key mapping if provided, otherwise use pattern as key
-                result_key = key_mapping.get(pattern, pattern) if key_mapping else pattern
+                result_key = (
+                    key_mapping.get(pattern, pattern) if key_mapping else pattern
+                )
                 result[result_key] = pattern_data or {}
 
             # Return combined data structure if any files found
@@ -106,6 +106,7 @@ def extract_multiple_files_from_zip(zip_file_path, patterns, key_mapping=None):
     except Exception as e:
         print(f"Error extracting multiple files from ZIP: {e}")
         return None
+
 
 def detect_faces_in_images(zip_file_path, image_uris):
     """
@@ -160,15 +161,24 @@ def detect_faces_in_images(zip_file_path, image_uris):
                             img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
                             # Resize the image using OpenCV
-                            img_down_np = cv2.resize(img_gray, (target_width, target_height), interpolation=cv2.INTER_LANCZOS4)
+                            img_down_np = cv2.resize(
+                                img_gray,
+                                (target_width, target_height),
+                                interpolation=cv2.INTER_LANCZOS4,
+                            )
 
                             # Single optimized detection pass
                             faces = face_cascade.detectMultiScale(
-                                img_down_np, scaleFactor=1.08, minNeighbors=3, minSize=(18, 18)
+                                img_down_np,
+                                scaleFactor=1.08,
+                                minNeighbors=3,
+                                minSize=(18, 18),
                             )
 
                             end_time = time.time()  # Record end time
-                            processing_time = end_time - start_time  # Calculate processing time
+                            processing_time = (
+                                end_time - start_time
+                            )  # Calculate processing time
                             print(
                                 "Processing time for {}: {:.2f} seconds".format(
                                     uri, processing_time

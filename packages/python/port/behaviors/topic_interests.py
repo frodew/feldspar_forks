@@ -9,6 +9,7 @@ title = {
     "de": "Welche Interessen hat Instagram über Sie abgeleitet?",
 }
 
+
 def extract_topic_interests(zip_file_path):
     """Extract topic interests data from ZIP file -> list of topics"""
 

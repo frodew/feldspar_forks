@@ -9,6 +9,7 @@ title = {
     "de": "Wie oft haben Sie neue Follower? [pro Tag]",
 }
 
+
 def extract_followers_new(zip_file_path):
     """Extract new followers data from ZIP file -> count per day"""
 
@@ -17,8 +18,6 @@ def extract_followers_new(zip_file_path):
 
     if followers_new_json is None:
         return None
-
-
 
     # file can just be dict and not list if only one follower
     if isinstance(followers_new_json, dict):

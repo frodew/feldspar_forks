@@ -9,6 +9,7 @@ title = {
     "de": "Ist auf Ihrem Profilfoto ein Gesicht sichtbar?",
 }
 
+
 def extract_profile_picture(zip_file_path):
     """Extract profile picture data from ZIP file and detect faces"""
 

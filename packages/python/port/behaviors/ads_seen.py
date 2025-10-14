@@ -9,6 +9,7 @@ title = {
     "de": "Wie oft haben Sie Werbung gesehen? [pro Tag]",
 }
 
+
 def extract_ads_seen(zip_file_path):
     """Extract ads seen data from ZIP file -> list of authors per day"""
 
@@ -32,6 +33,8 @@ def extract_ads_seen(zip_file_path):
 
     adds_viewed_df = pd.DataFrame({"Datum": dates, "Gesehene Konten": authors})
 
-    aggregated_df = adds_viewed_df.groupby("Datum")["Gesehene Konten"].agg(list).reset_index()
+    aggregated_df = (
+        adds_viewed_df.groupby("Datum")["Gesehene Konten"].agg(list).reset_index()
+    )
 
     return aggregated_df

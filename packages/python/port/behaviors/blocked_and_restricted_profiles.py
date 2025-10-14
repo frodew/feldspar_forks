@@ -9,6 +9,7 @@ title = {
     "de": "Wie oft haben Sie andere Profile blockiert und eingeschränkt? [pro Tag]",
 }
 
+
 def extract_blocked_profiles(blocked_profiles_json):
     """extract connections/followers_and_following/blocked_profiles -> count per day"""
 
@@ -66,12 +67,27 @@ def extract_blocked_and_restricted_profiles(zip_file_path):
         restricted_df = extract_restricted_profiles(restricted_data)
         if not restricted_df.empty:
             if not combined_df.empty:
-                restricted_df = restricted_df.rename(columns={restricted_df.columns[1]: "Anzahl"})
-                combined_df = pd.merge(combined_df, restricted_df, on="Datum", how='outer', suffixes=('_blocked', '_restricted'))
-                combined_df["Anzahl"] = combined_df.filter(like="Anzahl").sum(axis=1, skipna=True).fillna(0).astype(int)
+                restricted_df = restricted_df.rename(
+                    columns={restricted_df.columns[1]: "Anzahl"}
+                )
+                combined_df = pd.merge(
+                    combined_df,
+                    restricted_df,
+                    on="Datum",
+                    how="outer",
+                    suffixes=("_blocked", "_restricted"),
+                )
+                combined_df["Anzahl"] = (
+                    combined_df.filter(like="Anzahl")
+                    .sum(axis=1, skipna=True)
+                    .fillna(0)
+                    .astype(int)
+                )
                 combined_df = combined_df[["Datum", "Anzahl"]]
             else:
-                combined_df = restricted_df.rename(columns={restricted_df.columns[1]: "Anzahl"})
+                combined_df = restricted_df.rename(
+                    columns={restricted_df.columns[1]: "Anzahl"}
+                )
 
     if not combined_df.empty:
         combined_df = combined_df.sort_values(by="Datum").reset_index(drop=True)

@@ -98,8 +98,7 @@ def extract_session_count(zip_file_path):
 
     # Convert to DataFrame
     dates = [
-        epoch_to_date(daily_first_timestamp[d])
-        for d in daily_session_count.keys()
+        epoch_to_date(daily_first_timestamp[d]) for d in daily_session_count.keys()
     ]
     session_counts = list(daily_session_count.values())
 

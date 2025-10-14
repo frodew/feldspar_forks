@@ -9,6 +9,7 @@ title = {
     "de": "Haben Sie eine Telefonnummer in Ihrem Profil?",
 }
 
+
 def extract_phone_number(zip_file_path):
     """Extract phone number data from ZIP file -> dummy whether user has phone confirmed"""
 
@@ -27,7 +28,10 @@ def extract_phone_number(zip_file_path):
     ]:  # keys are language specific
         if k in personal_information_json["profile_user"][0]["string_map_data"]:
             phone = (
-                personal_information_json["profile_user"][0]["string_map_data"][k]["value"] != "False"
+                personal_information_json["profile_user"][0]["string_map_data"][k][
+                    "value"
+                ]
+                != "False"
             )
             break
 

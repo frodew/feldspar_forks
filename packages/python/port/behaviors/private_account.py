@@ -9,6 +9,7 @@ title = {
     "de": "Haben Sie ein privates (nicht öffentliches) Konto auf Instagram?",
 }
 
+
 def extract_private_account(zip_file_path):
     """Extract private account data from ZIP file -> dummies whether user has private account"""
 

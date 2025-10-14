@@ -12,6 +12,7 @@ import importlib
 # MAIN FUNCTION INITIATING THE DONATION PROCESS
 ############################
 
+
 def process(sessionId):
     key = "instagram-data-donation-main-study"
 
@@ -27,66 +28,67 @@ def process(sessionId):
             check_ddp = check_if_valid_instagram_ddp(fileResult.value)
 
             if check_ddp == "valid":
+                behaviors_to_extract = [
+                    "session_count",
+                    "ads_seen",
+                    "ads_clicked",
+                    "posts_and_videos_seen",
+                    "blocked_and_restricted_profiles",
+                    "post_stories_and_videos_commented",
+                    "post_stories_and_videos_liked",
+                    "story_interactions",
+                    "posts_created",
+                    "stories_created",
+                    "reels_created",
+                    "followers_new",
+                    "messages",
+                    "contact_syncing",
+                    "email_address",
+                    "phone_number",
+                    "gender",
+                    "profile_picture",
+                    "private_account",
+                    "paid_subscription",
+                    "topic_interests",
+                    "login_activity",
+                    "logout_activity",
+                ]
 
-              behaviors_to_extract = [
-                  'session_count',
-                  'ads_seen',
-                  'ads_clicked',
-                  'posts_and_videos_seen',
-                  'blocked_and_restricted_profiles',
-                  'post_and_reel_comments',
-                  'post_stories_and_comments_liked',
-                  'story_interactions',
-                  'posts_created',
-                  'stories_created',
-                  'reels_created',
-                  'followers_new',
-                  'messages',
-                  'contact_syncing',
-                  'email_address',
-                  'phone_number',
-                  'gender',
-                  'profile_picture',
-                  'private_account',
-                  'paid_subscription',
-                  'topic_interests',
-                  'login_activity',
-                  'logout_activity'
-              ]
+                extraction_result = []
 
-              extraction_result = []
+                for index, behavior_name in enumerate(behaviors_to_extract, start=1):
+                    percentage = (index / len(behaviors_to_extract)) * 100
 
-              for index, behavior_name in enumerate(behaviors_to_extract, start=1):
-                  percentage = (index / len(behaviors_to_extract)) * 100
+                    # Check if this behavior processes images and show add
+                    image_processing_behaviors = [
+                        "posts_created",
+                        "stories_created",
+                        "reels_created",
+                    ]
+                    if behavior_name in image_processing_behaviors:
+                        message = f"Verarbeitet Datei: {behavior_name} (Verarbeitung kann je nach Anzahl der Inhalte länger dauern)"
+                    else:
+                        message = f"Verarbeitet Datei: {behavior_name}"
 
-                  # Check if this behavior processes images and show add
-                  image_processing_behaviors = ['posts_created', 'stories_created', 'reels_created']
-                  if behavior_name in image_processing_behaviors:
-                      message = f"Verarbeitet Datei: {behavior_name} (Verarbeitung kann je nach Anzahl der Inhalte länger dauern)"
-                  else:
-                      message = f"Verarbeitet Datei: {behavior_name}"
+                    promptMessage = prompt_extraction_message(message, percentage)
+                    yield render_data_submission_page(promptMessage)
 
-                  promptMessage = prompt_extraction_message(message, percentage)
-                  yield render_data_submission_page(promptMessage)
+                    result = extract_behavior(behavior_name, fileResult.value)
+                    extraction_result.append(result)
 
-                  result = extract_behavior(behavior_name, fileResult.value)
-                  extraction_result.append(result)
+                if len(extraction_result) > 0:
+                    data = extraction_result
+                    break
+                else:
+                    retry_result = yield render_data_submission_page(
+                        retry_confirmation()
+                    )
+                    if retry_result.__type__ == "PayloadTrue":
+                        continue
+                    else:
+                        break
 
-
-              if len(extraction_result) > 0:
-                 data = extraction_result
-                 break
-              else:
-                 retry_result = yield render_data_submission_page(retry_confirmation())
-                 if retry_result.__type__ == "PayloadTrue":
-                     continue
-                 else:
-                     break
-
-
-            elif (
-                check_ddp == "invalid_no_json"
-            ):
+            elif check_ddp == "invalid_no_json":
                 retry_result = yield render_data_submission_page(
                     retry_confirmation_no_json()
                 )
@@ -94,10 +96,8 @@ def process(sessionId):
                 if retry_result.__type__ == "PayloadTrue":
                     continue
 
-            else: # also for invalid_no_ddp
-                retry_result = yield render_data_submission_page(
-                    retry_confirmation()
-                )
+            else:  # also for invalid_no_ddp
+                retry_result = yield render_data_submission_page(retry_confirmation())
 
                 if retry_result.__type__ == "PayloadTrue":
                     continue
@@ -116,6 +116,7 @@ def process(sessionId):
 ############################
 # HELPER FUNCTIONS IN THE DONATION PROCESS
 ############################
+
 
 def check_if_valid_instagram_ddp(filename):
     """Check if the uploaded file is a valid Instagram data download package"""
@@ -161,7 +162,10 @@ def check_if_valid_instagram_ddp(filename):
         print(f"An error occurred: {e}")
         return "invalid_file_error"
 
-def extract_behavior_with_progress(behavior_name, zip_file_path, base_percentage, behavior_weight):
+
+def extract_behavior_with_progress(
+    behavior_name, zip_file_path, base_percentage, behavior_weight
+):
     """
     Extract data for image processing behaviors with progress updates.
 
@@ -169,25 +173,26 @@ def extract_behavior_with_progress(behavior_name, zip_file_path, base_percentage
     """
     try:
         # Dynamically import the behavior module
-        behavior_module = importlib.import_module(f'port.behaviors.{behavior_name}')
-        extraction_function = getattr(behavior_module, f'extract_{behavior_name}')
+        behavior_module = importlib.import_module(f"port.behaviors.{behavior_name}")
+        extraction_function = getattr(behavior_module, f"extract_{behavior_name}")
 
         # Create progress callback
         def progress_callback(image_progress):
-            total_percentage = base_percentage + (image_progress / 100) * behavior_weight
+            total_percentage = (
+                base_percentage + (image_progress / 100) * behavior_weight
+            )
             message = f"Verarbeitet Datei: {behavior_name} ({image_progress:.0f}% Bilder verarbeitet)"
             promptMessage = prompt_extraction_message(message, total_percentage)
-            return {
-                'type': 'progress',
-                'ui': promptMessage
-            }
+            return {"type": "progress", "ui": promptMessage}
 
         # Call extraction with progress callback
         try:
-            result = extraction_function(zip_file_path, progress_callback=progress_callback)
+            result = extraction_function(
+                zip_file_path, progress_callback=progress_callback
+            )
 
             # Yield any progress updates that were generated
-            if hasattr(progress_callback, '_updates'):
+            if hasattr(progress_callback, "_updates"):
                 for update in progress_callback._updates:
                     yield update
 
@@ -198,27 +203,30 @@ def extract_behavior_with_progress(behavior_name, zip_file_path, base_percentage
                     columns=["Keine Informationen"],
                 )
 
-            yield {'type': 'result', 'data': result}
+            yield {"type": "result", "data": result}
 
         except Exception as e:
             error_df = pd.DataFrame(
-                [f"Extrahierung fehlgeschlagen - {behavior_name}, {type(e).__name__}: {str(e)}"],
+                [
+                    f"Extrahierung fehlgeschlagen - {behavior_name}, {type(e).__name__}: {str(e)}"
+                ],
                 columns=[str(behavior_name)],
             )
-            yield {'type': 'result', 'data': error_df}
+            yield {"type": "result", "data": error_df}
 
     except ImportError as e:
         error_df = pd.DataFrame(
             [f"Behavior '{behavior_name}' nicht gefunden: {str(e)}"],
             columns=["Fehler"],
         )
-        yield {'type': 'result', 'data': error_df}
+        yield {"type": "result", "data": error_df}
     except Exception as e:
         error_df = pd.DataFrame(
             [f"Unerwarteter Fehler für '{behavior_name}': {str(e)}"],
             columns=["Fehler"],
         )
-        yield {'type': 'result', 'data': error_df}
+        yield {"type": "result", "data": error_df}
+
 
 def extract_behavior(behavior_name, zip_file_path):
     """
@@ -233,10 +241,10 @@ def extract_behavior(behavior_name, zip_file_path):
     """
     try:
         # Dynamically import the behavior module
-        behavior_module = importlib.import_module(f'port.behaviors.{behavior_name}')
+        behavior_module = importlib.import_module(f"port.behaviors.{behavior_name}")
 
         # Get extraction function from the module
-        extraction_function = getattr(behavior_module, f'extract_{behavior_name}')
+        extraction_function = getattr(behavior_module, f"extract_{behavior_name}")
 
         # Call the behavior's extraction function directly with ZIP file path
         try:
@@ -252,7 +260,9 @@ def extract_behavior(behavior_name, zip_file_path):
             return result
         except Exception as e:
             error_df = pd.DataFrame(
-                [f"Extrahierung fehlgeschlagen - {behavior_name}, {type(e).__name__}: {str(e)}"],
+                [
+                    f"Extrahierung fehlgeschlagen - {behavior_name}, {type(e).__name__}: {str(e)}"
+                ],
                 columns=[str(behavior_name)],
             )
             return error_df
@@ -283,11 +293,11 @@ def get_behavior_info(behavior_name):
     """
     try:
         # Dynamically import the behavior module
-        behavior_module = importlib.import_module(f'port.behaviors.{behavior_name}')
+        behavior_module = importlib.import_module(f"port.behaviors.{behavior_name}")
 
         return {
-            'title': behavior_module.title,
-            'patterns': behavior_module.patterns,
+            "title": behavior_module.title,
+            "patterns": behavior_module.patterns,
         }
     except ImportError:
         return None
@@ -322,14 +332,14 @@ def prompt_consent(data, behaviors_list):
                 # Fallback if behavior info cannot be retrieved
                 behavior_title = {"de": f"Unbekanntes Verhalten: {behavior_name}"}
             else:
-                behavior_title = {"de": behavior_info['title']["de"]}
+                behavior_title = {"de": behavior_info["title"]["de"]}
 
             # Clean DataFrame for JSON serialization
             df_cleaned = df.copy()
 
             # Convert all columns to string to avoid serialization issues
             for col in df_cleaned.columns:
-                df_cleaned[col] = df_cleaned[col].fillna('').astype(str)
+                df_cleaned[col] = df_cleaned[col].fillna("").astype(str)
 
             df = df_cleaned
 
@@ -344,40 +354,44 @@ def prompt_consent(data, behaviors_list):
                 misc_data.append([translated_title, combined_value])
             else:
                 # Store table data for later creation with correct numbering
-                table_data_list.append({
-                    'behavior_name': behavior_name,
-                    'title': behavior_title,
-                    'df': df
-                })
+                table_data_list.append(
+                    {"behavior_name": behavior_name, "title": behavior_title, "df": df}
+                )
 
         # Add misc_data table data if there are any single-row entries
         if misc_data:
             misc_df = pd.DataFrame(misc_data, columns=["Kategorie", "Daten"])
-            table_data_list.append({
-                'behavior_name': "misc_data",
-                'title': {"de": "Einzelne Informationen"},
-                'description': {"de": "Übersicht, wo wenig oder keine Informationen vorliegen"},
-                'df': misc_df
-            })
+            table_data_list.append(
+                {
+                    "behavior_name": "misc_data",
+                    "title": {"de": "Einzelne Informationen"},
+                    "description": {
+                        "de": "Übersicht, wo wenig oder keine Informationen vorliegen"
+                    },
+                    "df": misc_df,
+                }
+            )
 
     # Create all tables with correct sequential numbering
     table_list = []
     for i, table_data in enumerate(table_data_list, start=1):
-        if table_data['behavior_name'] == "misc_data":
+        if table_data["behavior_name"] == "misc_data":
             table = props.PropsUIPromptConsentFormTable(
-                table_data['behavior_name'],
+                table_data["behavior_name"],
                 i,
-                props.Translatable(table_data['title']),
-                props.Translatable(table_data['description']),
-                table_data['df'],
+                props.Translatable(table_data["title"]),
+                props.Translatable(table_data["description"]),
+                table_data["df"],
             )
         else:
             table = props.PropsUIPromptConsentFormTable(
-                table_data['behavior_name'],
+                table_data["behavior_name"],
                 i,
-                props.Translatable(table_data['title']),
-                props.Translatable(table_data['title']),  # Using title as description for now
-                table_data['df'],
+                props.Translatable(table_data["title"]),
+                props.Translatable(
+                    table_data["title"]
+                ),  # Using title as description for now
+                table_data["df"],
             )
         table_list.append(table)
 
@@ -388,15 +402,9 @@ def prompt_consent(data, behaviors_list):
 
     donation_buttons = props.PropsUIDataSubmissionButtons(
         donate_question=props.Translatable(
-            {
-                "de": "Möchten Sie die obenstehenden Daten spenden?"
-            }
+            {"de": "Möchten Sie die obenstehenden Daten spenden?"}
         ),
-        donate_button=props.Translatable(
-            {
-                "de": "Ja, spenden"
-            }
-        ),
+        donate_button=props.Translatable({"de": "Ja, spenden"}),
     )
     consent_items.append(donation_buttons)
 
@@ -411,14 +419,9 @@ def prompt_consent(data, behaviors_list):
 # RENDER PAGES AND PROMPT MESSAGES
 ############################
 
+
 def render_data_submission_page(body):
-    header = props.PropsUIHeader(
-        props.Translatable(
-            {
-                "de": "Instagram Datenspende"
-            }
-        )
-    )
+    header = props.PropsUIHeader(props.Translatable({"de": "Instagram Datenspende"}))
 
     # Convert single body item to array if needed
     body_items = [body] if not isinstance(body, list) else body
@@ -432,13 +435,10 @@ def retry_confirmation():
             "de": "Leider können wir Ihre Datei nicht bearbeiten. Sind Sie sicher, dass Sie Ihre heruntergeladenen Instagram-Daten ausgewählt haben?"
         }
     )
-    ok = props.Translatable(
-        {
-            "de": "Erneut versuchen"
-        }
-    )
+    ok = props.Translatable({"de": "Erneut versuchen"})
 
     return props.PropsUIPromptConfirm(text, ok)
+
 
 def retry_confirmation_no_json():
     text = props.Translatable(
@@ -447,22 +447,15 @@ def retry_confirmation_no_json():
         }
     )
 
-    ok = props.Translatable(
-        {
-            "de": "Erneut versuchen mit richtigen Daten"
-        }
-    )
+    ok = props.Translatable({"de": "Erneut versuchen mit richtigen Daten"})
 
     return props.PropsUIPromptConfirm(text, ok)
 
+
 def prompt_file(extensions):
     description = props.Translatable(
-        {
-            "de": "Bitte wählen Sie Ihre heruntergeladene Instagram ZIP-Datei aus."
-        }
+        {"de": "Bitte wählen Sie Ihre heruntergeladene Instagram ZIP-Datei aus."}
     )
-
-
 
     return props.PropsUIPromptFileInput(description, extensions)
 

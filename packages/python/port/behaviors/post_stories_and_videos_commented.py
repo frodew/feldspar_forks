@@ -6,8 +6,9 @@ patterns = ["post_comments_1", "reels_comments", "hype"]
 
 # Title used in prompt_consent() to describe this behavior
 title = {
-    "de": "Wie oft haben Sie Posts, Reels und Stories kommentiert? [pro Tag]",
+    "de": "Wie oft haben Sie Posts, Stories oder Videos (Reels) kommentiert? [pro Tag]",
 }
+
 
 def extract_post_comments(post_comments_json):
     """extract your_instagram_activity/comments/post_comments_1 -> count per day"""
@@ -64,18 +65,20 @@ def extract_story_comments(story_comments_json):
     return aggregated_df.reset_index(name="Anzahl")
 
 
-def extract_post_and_reel_comments(zip_file_path):
+def extract_post_stories_and_videos_commented(zip_file_path):
     """Extract and combine post comments, reel comments, and story comments from ZIP file"""
 
     # Map file patterns to expected keys in the data structure
     key_mapping = {
         "post_comments_1": "post_comments",
         "reels_comments": "reel_comments",
-        "hype": "story_comments"
+        "hype": "story_comments",
     }
 
     # Extract data from ZIP file
-    combined_data = extract_multiple_files_from_zip(zip_file_path, patterns, key_mapping)
+    combined_data = extract_multiple_files_from_zip(
+        zip_file_path, patterns, key_mapping
+    )
 
     if combined_data is None:
         return None
@@ -88,7 +91,9 @@ def extract_post_and_reel_comments(zip_file_path):
     if post_comments_data:
         post_comments_df = extract_post_comments(post_comments_data)
         if not post_comments_df.empty:
-            combined_df = post_comments_df.rename(columns={post_comments_df.columns[1]: "Anzahl"})
+            combined_df = post_comments_df.rename(
+                columns={post_comments_df.columns[1]: "Anzahl"}
+            )
 
     # Extract reel comments if available
     reel_comments_data = combined_data.get("reel_comments", {})
@@ -96,12 +101,27 @@ def extract_post_and_reel_comments(zip_file_path):
         reel_comments_df = extract_reel_comments(reel_comments_data)
         if not reel_comments_df.empty:
             if not combined_df.empty:
-                reel_comments_df = reel_comments_df.rename(columns={reel_comments_df.columns[1]: "Anzahl"})
-                combined_df = pd.merge(combined_df, reel_comments_df, on="Datum", how='outer', suffixes=('_post', '_reel'))
-                combined_df["Anzahl"] = combined_df.filter(like="Anzahl").sum(axis=1, skipna=True).fillna(0).astype(int)
+                reel_comments_df = reel_comments_df.rename(
+                    columns={reel_comments_df.columns[1]: "Anzahl"}
+                )
+                combined_df = pd.merge(
+                    combined_df,
+                    reel_comments_df,
+                    on="Datum",
+                    how="outer",
+                    suffixes=("_post", "_reel"),
+                )
+                combined_df["Anzahl"] = (
+                    combined_df.filter(like="Anzahl")
+                    .sum(axis=1, skipna=True)
+                    .fillna(0)
+                    .astype(int)
+                )
                 combined_df = combined_df[["Datum", "Anzahl"]]
             else:
-                combined_df = reel_comments_df.rename(columns={reel_comments_df.columns[1]: "Anzahl"})
+                combined_df = reel_comments_df.rename(
+                    columns={reel_comments_df.columns[1]: "Anzahl"}
+                )
 
     # Extract story comments if available
     story_comments_data = combined_data.get("story_comments", {})
@@ -109,12 +129,27 @@ def extract_post_and_reel_comments(zip_file_path):
         story_comments_df = extract_story_comments(story_comments_data)
         if not story_comments_df.empty:
             if not combined_df.empty:
-                story_comments_df = story_comments_df.rename(columns={story_comments_df.columns[1]: "Anzahl"})
-                combined_df = pd.merge(combined_df, story_comments_df, on="Datum", how='outer', suffixes=('', '_story'))
-                combined_df["Anzahl"] = combined_df.filter(like="Anzahl").sum(axis=1, skipna=True).fillna(0).astype(int)
+                story_comments_df = story_comments_df.rename(
+                    columns={story_comments_df.columns[1]: "Anzahl"}
+                )
+                combined_df = pd.merge(
+                    combined_df,
+                    story_comments_df,
+                    on="Datum",
+                    how="outer",
+                    suffixes=("", "_story"),
+                )
+                combined_df["Anzahl"] = (
+                    combined_df.filter(like="Anzahl")
+                    .sum(axis=1, skipna=True)
+                    .fillna(0)
+                    .astype(int)
+                )
                 combined_df = combined_df[["Datum", "Anzahl"]]
             else:
-                combined_df = story_comments_df.rename(columns={story_comments_df.columns[1]: "Anzahl"})
+                combined_df = story_comments_df.rename(
+                    columns={story_comments_df.columns[1]: "Anzahl"}
+                )
 
     if not combined_df.empty:
         combined_df = combined_df.sort_values(by="Datum").reset_index(drop=True)

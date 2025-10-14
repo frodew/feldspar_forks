@@ -9,10 +9,9 @@ title = {
     "de": "Wie viele Posts und Videos haben Sie gesehen? [pro Tag]",
 }
 
+
 def extract_posts_seen(posts_seen_json):
     """extract ads_information/ads_and_topics/posts_viewed -> count per day"""
-
-
 
     timestamps = [
         t["string_map_data"]["Time"]["timestamp"]
@@ -30,8 +29,6 @@ def extract_posts_seen(posts_seen_json):
 
 def extract_videos_seen(videos_seen_json):
     """extract ads_information/ads_and_topics/videos_watched -> count per day"""
-
-
 
     timestamps = [
         t["string_map_data"]["Time"]["timestamp"]
@@ -75,8 +72,19 @@ def extract_posts_and_videos_seen(zip_file_path):
             if not combined_df.empty:
                 videos_df = videos_df.rename(columns={videos_df.columns[1]: "Anzahl"})
                 # Merge on date and sum the counts
-                combined_df = pd.merge(combined_df, videos_df, on="Datum", how='outer', suffixes=('_posts', '_videos'))
-                combined_df["Anzahl"] = combined_df.filter(like="Anzahl").sum(axis=1, skipna=True).fillna(0).astype(int)
+                combined_df = pd.merge(
+                    combined_df,
+                    videos_df,
+                    on="Datum",
+                    how="outer",
+                    suffixes=("_posts", "_videos"),
+                )
+                combined_df["Anzahl"] = (
+                    combined_df.filter(like="Anzahl")
+                    .sum(axis=1, skipna=True)
+                    .fillna(0)
+                    .astype(int)
+                )
                 combined_df = combined_df[["Datum", "Anzahl"]]
             else:
                 combined_df = videos_df.rename(columns={videos_df.columns[1]: "Anzahl"})
