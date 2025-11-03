@@ -2,7 +2,10 @@ from port.extraction_helpers import epoch_to_date, extract_multiple_files_from_z
 import pandas as pd
 
 # Patterns to find the relevant files for this behavior
-patterns = ["blocked_profiles", "restricted_profiles"]
+patterns = [
+    "connections/followers_and_following/blocked_profiles.json",
+    "connections/followers_and_following/restricted_profiles.json",
+]
 
 # Title used in prompt_consent() to describe this behavior
 title = {
@@ -55,15 +58,19 @@ def extract_blocked_and_restricted_profiles(zip_file_path):
     combined_df = pd.DataFrame(columns=["Datum", "Anzahl"])
 
     # Extract blocked profiles if available
-    blocked_data = combined_data.get("blocked_profiles", {})
-    if blocked_data:
+    blocked_data = combined_data.get(
+        "connections/followers_and_following/blocked_profiles.json", {}
+    )
+    if "relationships_blocked_users" in blocked_data:
         blocked_df = extract_blocked_profiles(blocked_data)
         if not blocked_df.empty:
             combined_df = blocked_df.rename(columns={blocked_df.columns[1]: "Anzahl"})
 
     # Extract restricted profiles if available
-    restricted_data = combined_data.get("restricted_profiles", {})
-    if restricted_data:
+    restricted_data = combined_data.get(
+        "connections/followers_and_following/restricted_profiles.json", {}
+    )
+    if "relationships_restricted_users" in restricted_data:
         restricted_df = extract_restricted_profiles(restricted_data)
         if not restricted_df.empty:
             if not combined_df.empty:
