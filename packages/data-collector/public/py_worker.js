@@ -109,8 +109,6 @@ function installPortPackage() {
   return self.pyodide.runPythonAsync(`
     import micropip
     await micropip.install("./port-0.0.0-py3-none-any.whl", deps=False)
-    await micropip.install("opencv-python")
-    await micropip.install("Pillow")
     import port
   `);
 }

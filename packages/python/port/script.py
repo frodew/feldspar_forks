@@ -1,12 +1,12 @@
+import importlib
+import json
+import zipfile
+
+import pandas as pd
+
 import port.api.props as props
 from port.api.assets import *
 from port.api.commands import CommandSystemDonate, CommandSystemExit, CommandUIRender
-
-import pandas as pd
-import zipfile
-import json
-import time
-import importlib
 
 ############################
 # MAIN FUNCTION INITIATING THE DONATION PROCESS
@@ -14,7 +14,7 @@ import importlib
 
 
 def process(sessionId):
-    key = "instagram-data-donation-main-study"
+    key = "project_workshop_youtube"
 
     # STEP 1: select the file
     data = None
@@ -24,34 +24,15 @@ def process(sessionId):
         fileResult = yield render_data_submission_page([promptFile])
 
         if fileResult.__type__ == "PayloadString":
-            # Check if valid Instagram DDP
-            check_ddp = check_if_valid_instagram_ddp(fileResult.value)
+            # Check if valid YouTube DDP
+            check_ddp = check_if_valid_youtube_ddp(fileResult.value)
 
             if check_ddp == "valid":
                 behaviors_to_extract = [
-                    "session_count",
-                    "ads_seen",
-                    "ads_clicked",
-                    "posts_and_videos_seen",
-                    "blocked_and_restricted_profiles",
-                    "post_stories_and_videos_commented",
-                    "post_stories_and_videos_liked",
-                    "story_interactions",
-                    "posts_created",
-                    "stories_created",
-                    "reels_created",
-                    "followers_new",
-                    "messages",
-                    "contact_syncing",
-                    "email_address",
-                    "phone_number",
-                    "gender",
-                    "profile_picture",
-                    "private_account",
-                    "paid_subscription",
-                    "topic_interests",
-                    "login_activity",
-                    "logout_activity",
+                    "watch_history",
+                    "search_history",
+                    "comments",
+                    "subscriptions",
                 ]
 
                 extraction_result = []
@@ -59,16 +40,7 @@ def process(sessionId):
                 for index, behavior_name in enumerate(behaviors_to_extract, start=1):
                     percentage = (index / len(behaviors_to_extract)) * 100
 
-                    # Check if this behavior processes images and show add
-                    image_processing_behaviors = [
-                        "posts_created",
-                        "stories_created",
-                        "reels_created",
-                    ]
-                    if behavior_name in image_processing_behaviors:
-                        message = f"Verarbeitet Datei: {behavior_name} (Verarbeitung kann je nach Anzahl der Inhalte länger dauern)"
-                    else:
-                        message = f"Verarbeitet Datei: {behavior_name}"
+                    message = f"Processing file: {behavior_name}"
 
                     promptMessage = prompt_extraction_message(message, percentage)
                     yield render_data_submission_page(promptMessage)
@@ -118,40 +90,43 @@ def process(sessionId):
 ############################
 
 
-def check_if_valid_instagram_ddp(filename):
-    """Check if the uploaded file is a valid Instagram data download package"""
-    folder_name_check_ddp = "ads_information"
-    file_name_check_html = "start_here.html"
+def check_if_valid_youtube_ddp(filename):
+    """Check if the uploaded file is a valid YouTube data download package"""
+    # Check for either English or German folder structure
+    folder_name_check_ddp_en = "YouTube and YouTube Music"
+    folder_name_check_ddp_de = "YouTube und YouTube Music"
 
     try:
         with zipfile.ZipFile(filename, "r") as zip_ref:
             found_folder_name_check_ddp = False
-            found_file_name_check_html = False
+            found_html_file = False
 
             for file_info in zip_ref.infolist():
-                if folder_name_check_ddp in file_info.filename:
+                if (
+                    folder_name_check_ddp_en in file_info.filename
+                    or folder_name_check_ddp_de in file_info.filename
+                ):
                     found_folder_name_check_ddp = True
 
-                if file_name_check_html in file_info.filename:
-                    found_file_name_check_html = True
+                # Check if any .html file exists (watch-history.html, search-history.html, etc.)
+                if file_info.filename.endswith(".html"):
+                    found_html_file = True
 
             if found_folder_name_check_ddp:
-                if found_file_name_check_html:
+                if found_html_file:
                     print(
-                        f"Folder '{folder_name_check_ddp}' found and file '{file_name_check_html}' found in the ZIP file. Seems like a Instagram HTML DDP."
+                        f"YouTube folder found and HTML file(s) found in the ZIP file. Seems like a YouTube HTML DDP."
                     )
                     return "invalid_no_json"
 
                 else:
                     print(
-                        f"Folder '{folder_name_check_ddp}' found and file '{file_name_check_html}' not found in the ZIP file. Seems like a real Instagram JSON DDP."
+                        f"YouTube folder found and no HTML files found in the ZIP file. Seems like a real YouTube JSON DDP."
                     )
                     return "valid"
 
             else:
-                print(
-                    f"Folder '{folder_name_check_ddp}' not found. Does not seem like an Instagram DDP."
-                )
+                print(f"YouTube folder not found. Does not seem like a YouTube DDP.")
                 return "invalid_no_ddp"
 
     except zipfile.BadZipFile:
@@ -168,7 +143,7 @@ def extract_behavior(behavior_name, zip_file_path):
     Extract data for a specific behavior using the new per-file system.
 
     Parameters:
-    - behavior_name: Name of the behavior (e.g., 'login_activity', 'time_spent')
+    - behavior_name: Name of the behavior (e.g., 'watch_history', 'search_history')
     - zip_file_path: Path to the ZIP file
 
     Returns:
@@ -188,30 +163,28 @@ def extract_behavior(behavior_name, zip_file_path):
             # Handle None return (missing files)
             if result is None:
                 return pd.DataFrame(
-                    [f'(Datei "{behavior_name}" fehlt)'],
-                    columns=["Keine Informationen"],
+                    [f'(File "{behavior_name}" missing)'],
+                    columns=["No Information"],
                 )
 
             return result
         except Exception as e:
             error_df = pd.DataFrame(
-                [
-                    f"Extrahierung fehlgeschlagen - {behavior_name}, {type(e).__name__}: {str(e)}"
-                ],
+                [f"Extraction failed - {behavior_name}, {type(e).__name__}: {str(e)}"],
                 columns=[str(behavior_name)],
             )
             return error_df
 
     except ImportError as e:
         error_df = pd.DataFrame(
-            [f"Behavior '{behavior_name}' nicht gefunden: {str(e)}"],
-            columns=["Fehler"],
+            [f"Behavior '{behavior_name}' not found: {str(e)}"],
+            columns=["Error"],
         )
         return error_df
     except Exception as e:
         error_df = pd.DataFrame(
-            [f"Unerwarteter Fehler für '{behavior_name}': {str(e)}"],
-            columns=["Fehler"],
+            [f"Unexpected error for '{behavior_name}': {str(e)}"],
+            columns=["Error"],
         )
         return error_df
 
@@ -221,7 +194,7 @@ def get_behavior_info(behavior_name):
     Get metadata (title, patterns, etc.) for a specific behavior.
 
     Parameters:
-    - behavior_name: Name of the behavior (e.g., 'login_activity', 'time_spent')
+    - behavior_name: Name of the behavior (e.g., 'watch_history', 'search_history')
 
     Returns:
     - Dictionary with behavior metadata or None if behavior not found
@@ -248,7 +221,7 @@ def prompt_consent(data, behaviors_list):
     description = props.PropsUIPromptText(
         text=props.Translatable(
             {
-                "de": "Hier finden Sie nun alle Daten, die Sie an uns spenden können. Wenn Sie bestimmte Daten nicht spenden wollen, können Sie diese löschen oder anpassen."
+                "en": "Here you can find all the data you can donate to us. If you do not want to donate certain data, you can delete or modify it."
             }
         )
     )
@@ -265,9 +238,9 @@ def prompt_consent(data, behaviors_list):
             behavior_info = get_behavior_info(behavior_name)
             if behavior_info is None:
                 # Fallback if behavior info cannot be retrieved
-                behavior_title = {"de": f"Unbekanntes Verhalten: {behavior_name}"}
+                behavior_title = {"en": f"Unknown Behavior: {behavior_name}"}
             else:
-                behavior_title = {"de": behavior_info["title"]["de"]}
+                behavior_title = {"en": behavior_info["title"]["en"]}
 
             # Clean DataFrame for JSON serialization
             df_cleaned = df.copy()
@@ -281,7 +254,7 @@ def prompt_consent(data, behaviors_list):
             # Check if the dataframe has only one row
             if len(df) == 1:
                 # Extract the title from the translation
-                translated_title = behavior_title["de"]
+                translated_title = behavior_title["en"]
                 # Combine values from all columns into a single string
                 combined_value = " | ".join(
                     [f"{col}: {df.iloc[0][col]}" for col in df.columns]
@@ -295,13 +268,13 @@ def prompt_consent(data, behaviors_list):
 
         # Add misc_data table data if there are any single-row entries
         if misc_data:
-            misc_df = pd.DataFrame(misc_data, columns=["Kategorie", "Daten"])
+            misc_df = pd.DataFrame(misc_data, columns=["Category", "Data"])
             table_data_list.append(
                 {
                     "behavior_name": "misc_data",
-                    "title": {"de": "Einzelne Informationen"},
+                    "title": {"en": "Individual Information"},
                     "description": {
-                        "de": "Übersicht, wo wenig oder keine Informationen vorliegen"
+                        "en": "Overview where little or no information is available"
                     },
                     "df": misc_df,
                 }
@@ -337,9 +310,9 @@ def prompt_consent(data, behaviors_list):
 
     donation_buttons = props.PropsUIDataSubmissionButtons(
         donate_question=props.Translatable(
-            {"de": "Möchten Sie die obenstehenden Daten spenden?"}
+            {"en": "Would you like to donate the above data?"}
         ),
-        donate_button=props.Translatable({"de": "Ja, spenden"}),
+        donate_button=props.Translatable({"en": "Yes, donate"}),
     )
     consent_items.append(donation_buttons)
 
@@ -356,7 +329,7 @@ def prompt_consent(data, behaviors_list):
 
 
 def render_data_submission_page(body):
-    header = props.PropsUIHeader(props.Translatable({"de": "Instagram Datenspende"}))
+    header = props.PropsUIHeader(props.Translatable({"en": "YouTube Data Donation"}))
 
     # Convert single body item to array if needed
     body_items = [body] if not isinstance(body, list) else body
@@ -367,10 +340,10 @@ def render_data_submission_page(body):
 def retry_confirmation():
     text = props.Translatable(
         {
-            "de": "Leider können wir Ihre Datei nicht bearbeiten. Sind Sie sicher, dass Sie Ihre heruntergeladenen Instagram-Daten ausgewählt haben?"
+            "en": "Unfortunately we cannot process your file. Are you sure you selected your downloaded YouTube data?"
         }
     )
-    ok = props.Translatable({"de": "Erneut versuchen"})
+    ok = props.Translatable({"en": "Try again"})
 
     return props.PropsUIPromptConfirm(text, ok)
 
@@ -378,18 +351,18 @@ def retry_confirmation():
 def retry_confirmation_no_json():
     text = props.Translatable(
         {
-            "de": 'Leider können wir Ihre Datei nicht verarbeiten. Es scheint so, dass Sie aus Versehen die HTML-Version Ihrer Instagram-Daten beantragt haben.\nBitte beantragen Sie erneut eine Datenspende bei Instagram und wählen Sie dabei "JSON" als Dateivormat aus (wie in der Anleitung beschrieben).'
+            "en": 'Unfortunately we cannot process your file. It seems you accidentally requested the HTML version of your YouTube data.\nPlease request your data again from YouTube and select "JSON" as the file format (as described in the instructions).'
         }
     )
 
-    ok = props.Translatable({"de": "Erneut versuchen mit richtigen Daten"})
+    ok = props.Translatable({"en": "Try again with correct data"})
 
     return props.PropsUIPromptConfirm(text, ok)
 
 
 def prompt_file(extensions):
     description = props.Translatable(
-        {"de": "Bitte wählen Sie Ihre heruntergeladene Instagram ZIP-Datei aus."}
+        {"en": "Please select your downloaded YouTube ZIP file."}
     )
 
     return props.PropsUIPromptFileInput(description, extensions)
@@ -398,7 +371,7 @@ def prompt_file(extensions):
 def prompt_extraction_message(message, percentage):
     description = props.Translatable(
         {
-            "de": "Einen Moment bitte. Es werden nun Informationen aus der ausgewählten Datei extrahiert."
+            "en": "One moment please. Information is now being extracted from the selected file."
         }
     )
 

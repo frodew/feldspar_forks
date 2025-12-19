@@ -20,7 +20,7 @@ export interface ScriptHostProps {
 
 const FeldsparContent: React.FC<ScriptHostProps> = ({
   workerUrl,
-  locale = "de",
+  locale = "en",
   standalone = false,
   className,
   factories = [],
@@ -41,7 +41,7 @@ const FeldsparContent: React.FC<ScriptHostProps> = ({
       assembly.visualizationEngine.start(
         containerRef.current!,
         selectedLocale,
-        setState
+        setState,
       );
       assembly.processingEngine.start();
       assemblyRef.current = assembly;
@@ -56,7 +56,8 @@ const FeldsparContent: React.FC<ScriptHostProps> = ({
     }
 
     const observer = new ResizeObserver(() => {
-      const height = window.document.documentElement.getBoundingClientRect().height;
+      const height =
+        window.document.documentElement.getBoundingClientRect().height;
       window.parent.postMessage({ action: "resize", height }, "*");
     });
 
@@ -64,8 +65,7 @@ const FeldsparContent: React.FC<ScriptHostProps> = ({
 
     // Send a message to the parent window indicating that the app has loaded. This is used
     // to trigger the setup of the channel between the iframe and the parent window.
-    window.parent.postMessage({ action: 'app-loaded' }, '*')
-
+    window.parent.postMessage({ action: "app-loaded" }, "*");
 
     return () => {
       observer.disconnect();
