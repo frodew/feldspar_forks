@@ -227,7 +227,6 @@ def prompt_consent(data, behaviors_list):
     )
 
     # Initialize lists to store data
-    misc_data = []
     table_data_list = []
 
     if data is not None:
@@ -251,56 +250,22 @@ def prompt_consent(data, behaviors_list):
 
             df = df_cleaned
 
-            # Check if the dataframe has only one row
-            if len(df) == 1:
-                # Extract the title from the translation
-                translated_title = behavior_title["en"]
-                # Combine values from all columns into a single string
-                combined_value = " | ".join(
-                    [f"{col}: {df.iloc[0][col]}" for col in df.columns]
-                )
-                misc_data.append([translated_title, combined_value])
-            else:
-                # Store table data for later creation with correct numbering
-                table_data_list.append(
-                    {"behavior_name": behavior_name, "title": behavior_title, "df": df}
-                )
-
-        # Add misc_data table data if there are any single-row entries
-        if misc_data:
-            misc_df = pd.DataFrame(misc_data, columns=["Category", "Data"])
+            # Store table data for later creation with correct numbering
             table_data_list.append(
-                {
-                    "behavior_name": "misc_data",
-                    "title": {"en": "Individual Information"},
-                    "description": {
-                        "en": "Overview where little or no information is available"
-                    },
-                    "df": misc_df,
-                }
+                {"behavior_name": behavior_name, "title": behavior_title, "df": df}
             )
-
     # Create all tables with correct sequential numbering
     table_list = []
     for i, table_data in enumerate(table_data_list, start=1):
-        if table_data["behavior_name"] == "misc_data":
-            table = props.PropsUIPromptConsentFormTable(
-                table_data["behavior_name"],
-                i,
-                props.Translatable(table_data["title"]),
-                props.Translatable(table_data["description"]),
-                table_data["df"],
-            )
-        else:
-            table = props.PropsUIPromptConsentFormTable(
-                table_data["behavior_name"],
-                i,
-                props.Translatable(table_data["title"]),
-                props.Translatable(
-                    table_data["title"]
-                ),  # Using title as description for now
-                table_data["df"],
-            )
+        table = props.PropsUIPromptConsentFormTable(
+            table_data["behavior_name"],
+            i,
+            props.Translatable(table_data["title"]),
+            props.Translatable(
+                table_data["title"]
+            ),  # Using title as description for now
+            table_data["df"],
+        )
         table_list.append(table)
 
     # Construct and render the final consent page
