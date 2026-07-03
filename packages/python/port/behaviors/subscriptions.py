@@ -8,7 +8,7 @@ patterns = ["subscriptions/subscriptions.csv", "Abos/Abos.csv"]
 
 # Title used in prompt_consent() to describe this behavior
 title = {
-    "en": "Subscriptions",
+    "de": "Abos",
 }
 
 

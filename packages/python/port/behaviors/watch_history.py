@@ -9,7 +9,7 @@ patterns = ["history/watch-history", "Verlauf/Wiedergabeverlauf"]
 
 # Title used in prompt_consent() to describe this behavior
 title = {
-    "en": "Watch History",
+    "de": "Wiedergabeverlauf",
 }
 
 

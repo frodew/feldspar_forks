@@ -9,7 +9,7 @@ patterns = ["comments/comments.csv", "Kommentare/Kommentare.csv"]
 
 # Title used in prompt_consent() to describe this behavior
 title = {
-    "en": "Comments",
+    "de": "Kommentare",
 }
 
 

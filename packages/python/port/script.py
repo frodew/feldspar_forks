@@ -221,7 +221,7 @@ def prompt_consent(data, behaviors_list):
     description = props.PropsUIPromptText(
         text=props.Translatable(
             {
-                "en": "Here you can find all the data you can donate to us. If you do not want to donate certain data, you can delete or modify it."
+                "de": "Hier finden Sie nun alle Daten, die Sie an uns spenden können. Wenn Sie bestimmte Daten nicht spenden wollen, können Sie diese löschen oder anpassen."
             }
         )
     )
@@ -237,9 +237,9 @@ def prompt_consent(data, behaviors_list):
             behavior_info = get_behavior_info(behavior_name)
             if behavior_info is None:
                 # Fallback if behavior info cannot be retrieved
-                behavior_title = {"en": f"Unknown Behavior: {behavior_name}"}
+                behavior_title = {"de": f"Unbekanntes Verhalten: {behavior_name}"}
             else:
-                behavior_title = {"en": behavior_info["title"]["en"]}
+                behavior_title = {"de": behavior_info["title"]["de"]}
 
             # Clean DataFrame for JSON serialization
             df_cleaned = df.copy()
@@ -275,9 +275,9 @@ def prompt_consent(data, behaviors_list):
 
     donation_buttons = props.PropsUIDataSubmissionButtons(
         donate_question=props.Translatable(
-            {"en": "Would you like to donate the above data?"}
+            {"de": "Möchten Sie die obenstehenden Daten spenden?"}
         ),
-        donate_button=props.Translatable({"en": "Yes, donate"}),
+        donate_button=props.Translatable({"de": "Ja, spenden"}),
     )
     consent_items.append(donation_buttons)
 
@@ -294,7 +294,7 @@ def prompt_consent(data, behaviors_list):
 
 
 def render_data_submission_page(body):
-    header = props.PropsUIHeader(props.Translatable({"en": "YouTube Data Donation"}))
+    header = props.PropsUIHeader(props.Translatable({"de": "YouTube Datenspende"}))
 
     # Convert single body item to array if needed
     body_items = [body] if not isinstance(body, list) else body
@@ -305,10 +305,10 @@ def render_data_submission_page(body):
 def retry_confirmation():
     text = props.Translatable(
         {
-            "en": "Unfortunately we cannot process your file. Are you sure you selected your downloaded YouTube data?"
+            "de": "Leider können wir Ihre Datei nicht bearbeiten. Sind Sie sicher, dass Sie Ihre heruntergeladenen YouTube-Daten ausgewählt haben?"
         }
     )
-    ok = props.Translatable({"en": "Try again"})
+    ok = props.Translatable({"de": "Erneut versuchen"})
 
     return props.PropsUIPromptConfirm(text, ok)
 
@@ -316,18 +316,18 @@ def retry_confirmation():
 def retry_confirmation_no_json():
     text = props.Translatable(
         {
-            "en": 'Unfortunately we cannot process your file. It seems you accidentally requested the HTML version of your YouTube data.\nPlease request your data again from YouTube and select "JSON" as the file format (as described in the instructions).'
+            "de": 'Leider können wir Ihre Datei nicht verarbeiten. Es scheint so, dass Sie aus Versehen die HTML-Version Ihrer YouTube-Daten beantragt haben.\nBitte beantragen Sie erneut eine Datenspende bei YouTube und wählen Sie dabei "JSON" als Dateiformat aus (wie in der Anleitung beschrieben).'
         }
     )
 
-    ok = props.Translatable({"en": "Try again with correct data"})
+    ok = props.Translatable({"de": "Erneut versuchen mit richtigen Daten"})
 
     return props.PropsUIPromptConfirm(text, ok)
 
 
 def prompt_file(extensions):
     description = props.Translatable(
-        {"en": "Please select your downloaded YouTube ZIP file."}
+        {"de": "Bitte wählen Sie Ihre heruntergeladene YouTube ZIP-Datei aus."}
     )
 
     return props.PropsUIPromptFileInput(description, extensions)
@@ -336,7 +336,7 @@ def prompt_file(extensions):
 def prompt_extraction_message(message, percentage):
     description = props.Translatable(
         {
-            "en": "One moment please. Information is now being extracted from the selected file."
+            "de": "Einen Moment bitte. Es werden nun Informationen aus der ausgewählten Datei extrahiert."
         }
     )
 

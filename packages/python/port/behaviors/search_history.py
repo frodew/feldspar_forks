@@ -9,7 +9,7 @@ patterns = ["history/search-history", "Verlauf/Suchverlauf"]
 
 # Title used in prompt_consent() to describe this behavior
 title = {
-    "en": "Search History",
+    "de": "Suchverlauf",
 }
 
 
