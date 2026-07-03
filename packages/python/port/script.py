@@ -191,7 +191,7 @@ def extract_behavior(behavior_name, zip_file_path):
 
 def get_behavior_info(behavior_name):
     """
-    Get metadata (title, patterns, etc.) for a specific behavior.
+    Get metadata (title) for a specific behavior.
 
     Parameters:
     - behavior_name: Name of the behavior (e.g., 'watch_history', 'search_history')
@@ -205,7 +205,6 @@ def get_behavior_info(behavior_name):
 
         return {
             "title": behavior_module.title,
-            "patterns": behavior_module.patterns,
         }
     except ImportError:
         return None
