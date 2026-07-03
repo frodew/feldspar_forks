@@ -92,19 +92,19 @@ def process(sessionId):
 
 def check_if_valid_youtube_ddp(filename):
     """Check if the uploaded file is a valid YouTube data download package"""
-    # Check for either English or German folder structure
-    folder_name_check_ddp_en = "YouTube and YouTube Music"
-    folder_name_check_ddp_de = "YouTube und YouTube Music"
-
     try:
         with zipfile.ZipFile(filename, "r") as zip_ref:
             found_folder_name_check_ddp = False
             found_html_file = False
 
             for file_info in zip_ref.infolist():
+                # The Takeout folder is always named "YouTube <conjunction>
+                # YouTube Music" - the conjunction word is localized, but
+                # "YouTube" and "YouTube Music" themselves are brand names
+                # and stay untranslated in every language.
                 if (
-                    folder_name_check_ddp_en in file_info.filename
-                    or folder_name_check_ddp_de in file_info.filename
+                    "YouTube" in file_info.filename
+                    and "YouTube Music" in file_info.filename
                 ):
                     found_folder_name_check_ddp = True
 

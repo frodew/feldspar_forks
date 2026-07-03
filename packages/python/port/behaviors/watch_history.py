@@ -2,10 +2,11 @@ from datetime import datetime
 
 import pandas as pd
 
-from port.extraction_helpers import extract_single_file_from_zip
+from port.extraction_helpers import find_activity_entries
 
-# Patterns to find the relevant files for this behavior (English and German)
-patterns = ["history/watch-history", "Verlauf/Wiedergabeverlauf"]
+# Marks a "My Activity" entry as a watch (rather than a search): the URL
+# shape doesn't depend on the export language, unlike the file/folder names.
+WATCH_URL_MARKER = "/watch?v="
 
 # Title used in prompt_consent() to describe this behavior
 title = {
@@ -34,68 +35,62 @@ def extract_watch_history(zip_file_path):
     Sorted by time with newest on top.
     """
 
-    # Try to find the file using either English or German pattern
-    watch_history_json = None
-    for pattern in patterns:
-        watch_history_json = extract_single_file_from_zip(zip_file_path, pattern)
-        if watch_history_json is not None:
-            break
+    # Find the watch history file by structure, regardless of its (localized)
+    # file/folder name
+    entries = find_activity_entries(zip_file_path, WATCH_URL_MARKER)
 
-    if watch_history_json is None:
+    if entries is None:
         return None
 
     # Extract data from each entry
     video_data = []
 
-    for entry in watch_history_json:
-        # Only include actual video watches (entries with titleUrl)
-        if "titleUrl" in entry and entry.get("titleUrl"):
-            # Extract video ID from URL (format: https://www.youtube.com/watch?v=VIDEO_ID)
-            video_id = None
-            title_url = entry.get("titleUrl", "")
-            if "watch?v=" in title_url:
-                video_id = title_url.split("watch?v=")[-1].split("&")[0]
+    for entry in entries:
+        title_url = entry.get("titleUrl", "")
+        if WATCH_URL_MARKER not in title_url:
+            continue
 
-            # Extract channel information from subtitles if available
-            channel_id = None
-            channel_name = None
+        # Extract video ID from URL (format: https://www.youtube.com/watch?v=VIDEO_ID)
+        video_id = title_url.split("watch?v=")[-1].split("&")[0]
 
-            if "subtitles" in entry and len(entry["subtitles"]) > 0:
-                subtitle = entry["subtitles"][0]
-                if "url" in subtitle:
-                    channel_url = subtitle["url"]
-                    # Extract channel ID from URL (format: http://www.youtube.com/channel/CHANNEL_ID)
-                    if "/channel/" in channel_url:
-                        channel_id = channel_url.split("/channel/")[-1]
-                if "name" in subtitle:
-                    channel_name = subtitle["name"]
+        # Extract channel information from subtitles if available
+        channel_id = None
+        channel_name = None
 
-            # Extract timestamp
-            timestamp = entry.get("time", "")
+        if "subtitles" in entry and len(entry["subtitles"]) > 0:
+            subtitle = entry["subtitles"][0]
+            if "url" in subtitle:
+                channel_url = subtitle["url"]
+                # Extract channel ID from URL (format: http://www.youtube.com/channel/CHANNEL_ID)
+                if "/channel/" in channel_url:
+                    channel_id = channel_url.split("/channel/")[-1]
+            if "name" in subtitle:
+                channel_name = subtitle["name"]
 
-            # Extract activity controls
-            activity_controls = entry.get("activityControls", [])
-            activity_controls_str = (
-                ", ".join(activity_controls) if activity_controls else ""
-            )
+        # Extract timestamp
+        timestamp = entry.get("time", "")
 
-            # Extract video title (remove "Watched " or "Angesehen " prefix if present)
-            video_title = entry.get("title", "")
-            if video_title.startswith("Watched "):
-                video_title = video_title[8:]
-            elif video_title.startswith("Angesehen "):  # German
-                video_title = video_title[10:]
+        # Extract activity controls
+        activity_controls = entry.get("activityControls", [])
+        activity_controls_str = (
+            ", ".join(activity_controls) if activity_controls else ""
+        )
 
-            video_data.append(
-                {
-                    "Timestamp": format_timestamp(timestamp),
-                    "Video Title": video_title,
-                    "Video ID": video_id if video_id else "",
-                    "Channel Name": channel_name if channel_name else "",
-                    "Channel ID": channel_id if channel_id else "",
-                    "Activity Controls": activity_controls_str,
-                }
-            )
+        # Video title is kept as exported (e.g. "Watched X" or "X angesehen"):
+        # the verb is placed differently in every language, so there's no
+        # reliable way to strip it without hardcoding each language's grammar
+        video_title = entry.get("title", "")
+
+        video_data.append(
+            {
+                "Timestamp": format_timestamp(timestamp),
+                "Video Title": video_title,
+                "Video ID": video_id if video_id else "",
+                "Channel Name": channel_name if channel_name else "",
+                "Channel ID": channel_id if channel_id else "",
+                "Activity Controls": activity_controls_str,
+            }
+        )
 
     if not video_data:
         return pd.DataFrame(

@@ -2,10 +2,11 @@ from datetime import datetime
 
 import pandas as pd
 
-from port.extraction_helpers import extract_single_file_from_zip
+from port.extraction_helpers import find_activity_entries
 
-# Patterns to find the relevant files for this behavior (English and German)
-patterns = ["history/search-history", "Verlauf/Suchverlauf"]
+# Marks a "My Activity" entry as a search (rather than a watch): the URL
+# shape doesn't depend on the export language, unlike the file/folder names.
+SEARCH_URL_MARKER = "/results?search_query="
 
 # Title used in prompt_consent() to describe this behavior
 title = {
@@ -31,39 +32,22 @@ def extract_search_history(zip_file_path):
     """
     Extract YouTube search history from ZIP file.
     Returns complete list of search queries with search query text and timestamp.
-    Only includes entries where title starts with "Searched for" or "Gesucht nach:".
     Sorted by time with newest on top.
     """
 
-    # Try to find the file using either English or German pattern
-    search_history_json = None
-    for pattern in patterns:
-        search_history_json = extract_single_file_from_zip(zip_file_path, pattern)
-        if search_history_json is not None:
-            break
+    # Find the search history file by structure, regardless of its
+    # (localized) file/folder name
+    entries = find_activity_entries(zip_file_path, SEARCH_URL_MARKER)
 
-    if search_history_json is None:
+    if entries is None:
         return None
 
     # Extract data from each entry
     search_data = []
 
-    for entry in search_history_json:
-        # Extract title
-        title_text = entry.get("title", "")
-
-        # Only include entries where title starts with "Searched for" or "Gesucht nach:"
-        is_search = False
-        search_query = ""
-
-        if title_text.startswith("Searched for "):
-            is_search = True
-            search_query = title_text[13:]  # Keep everything after "Searched for "
-        elif title_text.startswith("Gesucht nach: "):
-            is_search = True
-            search_query = title_text[14:]  # Keep everything after "Gesucht nach: "
-
-        if not is_search:
+    for entry in entries:
+        title_url = entry.get("titleUrl", "")
+        if SEARCH_URL_MARKER not in title_url:
             continue
 
         # Extract timestamp
@@ -75,10 +59,14 @@ def extract_search_history(zip_file_path):
             ", ".join(activity_controls) if activity_controls else ""
         )
 
+        # Search query is kept as exported (e.g. "Searched for X" or
+        # "Gesucht nach: X"): the verb is placed differently in every
+        # language, so there's no reliable way to strip it without
+        # hardcoding each language's grammar
         search_data.append(
             {
                 "Timestamp": format_timestamp(timestamp),
-                "Search Query": search_query,
+                "Search Query": entry.get("title", ""),
                 "Activity Controls": activity_controls_str,
             }
         )

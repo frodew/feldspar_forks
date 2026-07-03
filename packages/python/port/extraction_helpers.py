@@ -1,35 +1,75 @@
 import json
 import zipfile
+from io import StringIO
+
+import pandas as pd
 
 
-def extract_single_file_from_zip(zip_file_path, pattern):
+def find_activity_entries(zip_file_path, title_url_marker):
     """
-    Extract a single JSON file from ZIP file based on pattern.
-    Returns the JSON data or None if not found.
+    Find a Google "My Activity" JSON file inside the ZIP by structure rather
+    than by file/folder name, since those names are localized (e.g. the
+    watch history file is "watch-history.json" in English but
+    "Wiedergabeverlauf.json" in German).
 
-    Args:
-        zip_file_path: Path to the ZIP file
-        pattern: Pattern to match in file path (e.g., "history/watch-history")
+    The JSON keys themselves (title, titleUrl, time, ...) stay in English
+    regardless of locale, and the "titleUrl" shape reliably tells watch
+    entries (.../watch?v=...) apart from search entries
+    (.../results?search_query=...) independent of language. So we look for
+    the JSON file that has entries whose titleUrl contains `title_url_marker`.
 
-    Returns:
-        Parsed JSON data or None if file not found
+    Returns the parsed list of entries, or None if no matching file exists.
     """
-    try:
-        with zipfile.ZipFile(zip_file_path, "r") as zip_ref:
-            file_names = zip_ref.namelist()
+    with zipfile.ZipFile(zip_file_path, "r") as zip_ref:
+        for file_name in zip_ref.namelist():
+            if not file_name.endswith(".json"):
+                continue
+            try:
+                with zip_ref.open(file_name) as json_file:
+                    data = json.loads(json_file.read().decode("utf-8"))
+            except Exception:
+                continue
 
-            # Find and load file matching pattern
-            for file_name in file_names:
-                if file_name.endswith(".json") and pattern in file_name:
-                    try:
-                        with zip_ref.open(file_name) as json_file:
-                            json_content = json_file.read()
-                            return json.loads(json_content)
-                    except Exception as e:
-                        print(f"Error reading {pattern} file {file_name}: {e}")
+            if not isinstance(data, list):
+                continue
 
-            return None
+            if any(
+                isinstance(entry, dict) and title_url_marker in entry.get("titleUrl", "")
+                for entry in data
+            ):
+                return data
 
-    except Exception as e:
-        print(f"Error extracting {pattern} from ZIP: {e}")
-        return None
+    return None
+
+
+def find_csv_by_shape(zip_file_path, num_columns, matches):
+    """
+    Find a CSV file inside the ZIP by its shape rather than by file/folder
+    name, since those names (and the column headers) are localized (e.g.
+    subscriptions.csv becomes Abos.csv with headers "Kanal-ID, Kanal-URL,
+    Kanaltitel" in German). Column order stays the same across locales, so
+    callers should read the returned DataFrame by column position.
+
+    `matches` is called with the parsed DataFrame and should return True if
+    it looks like the file we want (e.g. by checking cell values, which are
+    not translated).
+
+    Returns the parsed DataFrame, or None if no matching file exists.
+    """
+    with zipfile.ZipFile(zip_file_path, "r") as zip_ref:
+        for file_name in zip_ref.namelist():
+            if not file_name.endswith(".csv"):
+                continue
+            try:
+                with zip_ref.open(file_name) as csv_file:
+                    df = pd.read_csv(StringIO(csv_file.read().decode("utf-8")))
+            except Exception:
+                continue
+
+            if df.empty or len(df.columns) != num_columns:
+                continue
+
+            if matches(df):
+                return df
+
+    return None
