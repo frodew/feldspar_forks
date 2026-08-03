@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, TypedDict, Union
 
 import pandas as pd
@@ -110,12 +110,15 @@ class PropsUIPromptConsentFormTable:
     data_frame: pd.DataFrame
     data_frame_max_size: int = 10000
     headers: Optional[dict[str, Translatable]] = None
+    deleted_row_count: int = field(init=False, default=0)
 
     def __post_init__(self):
         if self.data_frame_max_size < 1:
             self.data_frame_max_size = 1
-        if len(self.data_frame) > self.data_frame_max_size:
+        original_row_count = len(self.data_frame)
+        if original_row_count > self.data_frame_max_size:
             self.data_frame = self.data_frame.head(self.data_frame_max_size).reset_index(drop=True)
+        self.deleted_row_count = original_row_count - len(self.data_frame)
 
     def toDict(self):
         dict = {}
@@ -125,6 +128,7 @@ class PropsUIPromptConsentFormTable:
         dict["title"] = self.title.toDict()
         dict["description"] = self.description.toDict()
         dict["data_frame"] = self.data_frame.to_json()
+        dict["deletedRowCount"] = self.deleted_row_count
         if self.headers:
             dict["headers"] = {
                 key: value.toDict() for key, value in self.headers.items()
