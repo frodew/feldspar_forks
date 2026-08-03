@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, TypedDict, Union
 
 import pandas as pd
@@ -117,6 +117,7 @@ class PropsUIPromptConsentFormTable:
     data_frame_max_size: Optional[int] = 10000
     headers: Optional[dict[str, Translatable]] = None
     column_widths: Optional[dict[str, float]] = None
+    deleted_row_count: int = field(init=False, default=0)
 
     def __post_init__(self):
         if not isinstance(self.data_frame, pd.DataFrame):
@@ -124,11 +125,13 @@ class PropsUIPromptConsentFormTable:
                 "PropsUIPromptConsentFormTable requires a data_frame; "
                 "when omitting description, pass it as data_frame=..."
             )
+        original_row_count = len(self.data_frame)
         if self.data_frame_max_size is not None:
             if self.data_frame_max_size < 1:
                 self.data_frame_max_size = 1
             if len(self.data_frame) > self.data_frame_max_size:
                 self.data_frame = self.data_frame.head(self.data_frame_max_size).reset_index(drop=True)
+        self.deleted_row_count = original_row_count - len(self.data_frame)
         for column, width in (self.column_widths or {}).items():
             if not width > 0:
                 raise ValueError(f"column_widths[{column!r}] must be positive, got {width!r}")
@@ -142,6 +145,7 @@ class PropsUIPromptConsentFormTable:
         if self.description:
             dict["description"] = self.description.toDict()
         dict["data_frame"] = self.data_frame.to_json()
+        dict["deletedRowCount"] = self.deleted_row_count
         if self.headers:
             dict["headers"] = {
                 key: value.toDict() for key, value in self.headers.items()

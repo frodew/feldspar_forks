@@ -89,7 +89,7 @@ export class RadioInputFactory implements PromptFactory {
 export class TableFactory implements PromptFactory {
   create(body: unknown, context: PromptContext): JSX.Element | null {
     if (isPropsUIPromptConsentFormTable(body)) {
-      const { id, number, title, description, data_frame } = body;
+      const { id, number, title, description, data_frame, deletedRowCount } = body;
       const dataFrame = JSON.parse(data_frame);
 
       // Headers are display labels only; donated rows keep the data frame column names.
@@ -131,7 +131,7 @@ export class TableFactory implements PromptFactory {
           number: number,
           title: Translator.translate(title, context.locale),
           description: description && Translator.translate(description, context.locale),
-          deletedRowCount: 0
+          deletedRowCount: deletedRowCount ?? 0
         },
         context,
         onChange: () => {}  // Tables in data submission page are read-only
