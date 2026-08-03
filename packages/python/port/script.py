@@ -15,18 +15,12 @@ logger = logging.getLogger(__name__)
 # MAIN FUNCTION INITIATING THE DONATION PROCESS
 ############################
 
-# Row cap applied to each behavior's table when it's shown in the consent
-# form and donated (via PropsUIPromptConsentFormTable.data_frame_max_size).
-# Real YouTube exports can be very large (watch history especially); this
-# keeps the donated/displayed payload bounded. Sized with headroom above the
-# largest real files seen so far (~10,000 watch history rows, ~1,000 search
-# history rows) - comments/subscriptions aren't expected to be large but get
-# a cap too as a cheap safety net.
+# Row cap applied to each behavior's table when it's shown in the consent form and donated (via PropsUIPromptConsentFormTable.data_frame_max_size).
 BEHAVIOR_ROW_CAPS = {
-    "watch_history": 20000,
-    "search_history": 10000,
-    "comments": 5000,
-    "subscriptions": 5000,
+    "watch_history": 50000,
+    "search_history": 20000,
+    "comments": 10000,
+    "subscriptions": 10000,
 }
 
 
