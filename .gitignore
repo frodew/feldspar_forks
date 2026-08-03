@@ -46,4 +46,7 @@ node_modules/
 # Act artifacts
 .artifacts/
 
+# Local example DDPs (contain real personal data, not for the repo)
+/example_ddps/
+
 
