@@ -12,11 +12,7 @@ from port.api.commands import CommandSystemDonate, CommandSystemExit, CommandUIR
 # MAIN FUNCTION INITIATING THE DONATION PROCESS
 ############################
 
-# Maximum number of rows kept per behavior table. Real YouTube exports can be
-# very large (watch history especially), and fully parsing+serializing an
-# unbounded table can exhaust the Pyodide worker's memory - once that happens
-# the worker is killed outright with no catchable Python exception, so this
-# cap exists to keep memory bounded rather than to react to it after the fact.
+# Maximum number of rows kept per behavior table. Real YouTube exports can be very large (watch history especially), and fully parsing+serializing an unbounded table can exhaust the Pyodide worker's memory - once that happens the worker is killed outright with no catchable Python exception, so this cap exists to keep memory bounded rather than to react to it after the fact.
 BEHAVIOR_ROW_CAPS = {
     "watch_history": 20000,
     "search_history": 10000,
@@ -26,7 +22,7 @@ BEHAVIOR_ROW_CAPS = {
 
 
 def process(sessionId):
-    key = "project_workshop_youtube"
+    key = "radical_dd"
 
     yield donate(f"{sessionId}-{key}-tracking", json.dumps({"event": "session_started"}))
 
