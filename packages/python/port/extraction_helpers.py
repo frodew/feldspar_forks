@@ -42,6 +42,17 @@ def find_activity_entries(zip_file_path, title_url_marker):
     return None
 
 
+def cap_rows(df, max_rows):
+    """
+    Truncate df to at most max_rows rows (kept in existing row order - callers
+    should sort before calling if "most recent" rows should be preserved).
+    Returns (df, dropped_row_count).
+    """
+    if len(df) <= max_rows:
+        return df, 0
+    return df.head(max_rows).reset_index(drop=True), len(df) - max_rows
+
+
 def find_csv_by_shape(zip_file_path, num_columns, matches):
     """
     Find a CSV file inside the ZIP by its shape rather than by file/folder

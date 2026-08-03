@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from port.extraction_helpers import find_activity_entries
+from port.extraction_helpers import cap_rows, find_activity_entries
 
 # Marks a "My Activity" entry as a watch (rather than a search): the URL
 # shape doesn't depend on the export language, unlike the file/folder names.
@@ -28,7 +28,7 @@ def format_timestamp(timestamp_str):
         return timestamp_str
 
 
-def extract_watch_history(zip_file_path):
+def extract_watch_history(zip_file_path, max_rows):
     """
     Extract YouTube watch history from ZIP file.
     Returns complete list of watched videos with Video ID, Channel ID, Channel name, and Timestamp.
@@ -40,7 +40,7 @@ def extract_watch_history(zip_file_path):
     entries = find_activity_entries(zip_file_path, WATCH_URL_MARKER)
 
     if entries is None:
-        return None
+        return None, 0
 
     # Extract data from each entry
     video_data = []
@@ -93,15 +93,18 @@ def extract_watch_history(zip_file_path):
         )
 
     if not video_data:
-        return pd.DataFrame(
-            columns=[
-                "Timestamp",
-                "Video Title",
-                "Video ID",
-                "Channel Name",
-                "Channel ID",
-                "Activity Controls",
-            ]
+        return (
+            pd.DataFrame(
+                columns=[
+                    "Timestamp",
+                    "Video Title",
+                    "Video ID",
+                    "Channel Name",
+                    "Channel ID",
+                    "Activity Controls",
+                ]
+            ),
+            0,
         )
 
     # Create DataFrame
@@ -112,4 +115,4 @@ def extract_watch_history(zip_file_path):
     df = df.sort_values(by="Timestamp_sort", ascending=False).reset_index(drop=True)
     df = df.drop(columns=["Timestamp_sort"])
 
-    return df
+    return cap_rows(df, max_rows)

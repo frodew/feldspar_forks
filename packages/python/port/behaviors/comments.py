@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from port.extraction_helpers import find_csv_by_shape
+from port.extraction_helpers import cap_rows, find_csv_by_shape
 
 # Title used in prompt_consent() to describe this behavior
 title = {
@@ -34,7 +34,7 @@ def format_timestamp(timestamp_str):
         return timestamp_str
 
 
-def extract_comments(zip_file_path):
+def extract_comments(zip_file_path, max_rows):
     """
     Extract YouTube comments from ZIP file.
     Returns complete list of comments with Channel ID, Video ID, and Timestamp.
@@ -44,7 +44,7 @@ def extract_comments(zip_file_path):
     comments_csv = find_csv_by_shape(zip_file_path, 6, is_comments_csv)
 
     if comments_csv is None:
-        return None
+        return None, 0
 
     # Create output DataFrame with formatted timestamps (columns addressed by
     # position, since the column headers are localized)
@@ -61,4 +61,4 @@ def extract_comments(zip_file_path):
     df = df.sort_values(by="Timestamp_sort", ascending=False).reset_index(drop=True)
     df = df.drop(columns=["Timestamp_sort"])
 
-    return df
+    return cap_rows(df, max_rows)

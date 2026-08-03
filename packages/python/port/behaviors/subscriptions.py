@@ -1,6 +1,6 @@
 import pandas as pd
 
-from port.extraction_helpers import find_csv_by_shape
+from port.extraction_helpers import cap_rows, find_csv_by_shape
 
 # Title used in prompt_consent() to describe this behavior
 title = {
@@ -18,7 +18,7 @@ def is_subscriptions_csv(df):
     return df.iloc[:, 1].astype(str).str.contains("youtube.com/channel/").any()
 
 
-def extract_subscriptions(zip_file_path):
+def extract_subscriptions(zip_file_path, max_rows):
     """
     Extract YouTube subscriptions from ZIP file.
     Returns complete list of subscribed channels with Channel ID and Channel name.
@@ -27,7 +27,7 @@ def extract_subscriptions(zip_file_path):
     subscriptions_csv = find_csv_by_shape(zip_file_path, 3, is_subscriptions_csv)
 
     if subscriptions_csv is None:
-        return None
+        return None, 0
 
     # Create output DataFrame with columns in correct order (by position,
     # since the column headers are localized)
@@ -38,4 +38,4 @@ def extract_subscriptions(zip_file_path):
         }
     )
 
-    return df
+    return cap_rows(df, max_rows)

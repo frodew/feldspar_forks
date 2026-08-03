@@ -12,9 +12,23 @@ from port.api.commands import CommandSystemDonate, CommandSystemExit, CommandUIR
 # MAIN FUNCTION INITIATING THE DONATION PROCESS
 ############################
 
+# Maximum number of rows kept per behavior table. Real YouTube exports can be
+# very large (watch history especially), and fully parsing+serializing an
+# unbounded table can exhaust the Pyodide worker's memory - once that happens
+# the worker is killed outright with no catchable Python exception, so this
+# cap exists to keep memory bounded rather than to react to it after the fact.
+BEHAVIOR_ROW_CAPS = {
+    "watch_history": 20000,
+    "search_history": 10000,
+    "comments": 5000,
+    "subscriptions": 5000,
+}
+
 
 def process(sessionId):
     key = "project_workshop_youtube"
+
+    yield donate(f"{sessionId}-{key}-tracking", json.dumps({"event": "session_started"}))
 
     # STEP 1: select the file
     data = None
@@ -26,6 +40,15 @@ def process(sessionId):
         if fileResult.__type__ == "PayloadString":
             # Check if valid YouTube DDP
             check_ddp = check_if_valid_youtube_ddp(fileResult.value)
+
+            tracking_payload = {"event": "zip_check", "result": check_ddp}
+            if check_ddp == "valid":
+                tracking_payload["largest_json_bytes"] = get_largest_json_entry_size(
+                    fileResult.value
+                )
+            yield donate(
+                f"{sessionId}-{key}-tracking", json.dumps(tracking_payload)
+            )
 
             if check_ddp == "valid":
                 behaviors_to_extract = [
@@ -45,8 +68,15 @@ def process(sessionId):
                     promptMessage = prompt_extraction_message(message, percentage)
                     yield render_data_submission_page(promptMessage)
 
-                    result = extract_behavior(behavior_name, fileResult.value)
+                    result, behavior_status = extract_behavior(
+                        behavior_name, fileResult.value
+                    )
                     extraction_result.append(result)
+
+                    yield donate(
+                        f"{sessionId}-{key}-tracking",
+                        json.dumps({"behavior": behavior_name, **behavior_status}),
+                    )
 
                 if len(extraction_result) > 0:
                     data = extraction_result
@@ -138,6 +168,29 @@ def check_if_valid_youtube_ddp(filename):
         return "invalid_file_error"
 
 
+def get_largest_json_entry_size(filename):
+    """
+    Uncompressed size (bytes) of the largest .json member in the zip, read
+    from zip metadata only (no decompression). Used purely as an
+    observability signal in the tracking donation: if a behavior's
+    extraction never reports back after this size was flagged as large,
+    that's the closest indirect evidence available that the worker ran out
+    of memory parsing it (a true out-of-memory failure kills the worker
+    before any Python code, including logging, gets a chance to run - so it
+    can't be caught or logged directly).
+    """
+    try:
+        with zipfile.ZipFile(filename, "r") as zip_ref:
+            json_sizes = [
+                info.file_size
+                for info in zip_ref.infolist()
+                if info.filename.endswith(".json")
+            ]
+            return max(json_sizes) if json_sizes else 0
+    except Exception:
+        return 0
+
+
 def extract_behavior(behavior_name, zip_file_path):
     """
     Extract data for a specific behavior using the new per-file system.
@@ -147,9 +200,12 @@ def extract_behavior(behavior_name, zip_file_path):
     - zip_file_path: Path to the ZIP file
 
     Returns:
-    - DataFrame with extracted data or error DataFrame
+    - Tuple of (DataFrame with extracted data or error DataFrame, status dict
+      describing what happened - used only for the tracking donation)
     """
     try:
+        max_rows = BEHAVIOR_ROW_CAPS[behavior_name]
+
         # Dynamically import the behavior module
         behavior_module = importlib.import_module(f"port.behaviors.{behavior_name}")
 
@@ -158,35 +214,51 @@ def extract_behavior(behavior_name, zip_file_path):
 
         # Call the behavior's extraction function directly with ZIP file path
         try:
-            result = extraction_function(zip_file_path)
+            result, dropped_rows = extraction_function(zip_file_path, max_rows)
 
             # Handle None return (missing files)
             if result is None:
-                return pd.DataFrame(
-                    [f'(File "{behavior_name}" missing)'],
-                    columns=["No Information"],
+                return (
+                    pd.DataFrame(
+                        [f'(File "{behavior_name}" missing)'],
+                        columns=["No Information"],
+                    ),
+                    {"status": "missing"},
                 )
 
-            return result
+            if dropped_rows:
+                status = {
+                    "status": "truncated",
+                    "rows_kept": len(result),
+                    "rows_dropped": dropped_rows,
+                }
+            else:
+                status = {"status": "ok", "rows": len(result)}
+
+            return result, status
         except Exception as e:
             error_df = pd.DataFrame(
                 [f"Extraction failed - {behavior_name}, {type(e).__name__}: {str(e)}"],
                 columns=[str(behavior_name)],
             )
-            return error_df
+            return error_df, {
+                "status": "failed",
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+            }
 
     except ImportError as e:
         error_df = pd.DataFrame(
             [f"Behavior '{behavior_name}' not found: {str(e)}"],
             columns=["Error"],
         )
-        return error_df
+        return error_df, {"status": "import_error", "error_message": str(e)}
     except Exception as e:
         error_df = pd.DataFrame(
             [f"Unexpected error for '{behavior_name}': {str(e)}"],
             columns=["Error"],
         )
-        return error_df
+        return error_df, {"status": "unexpected_error", "error_message": str(e)}
 
 
 def get_behavior_info(behavior_name):
