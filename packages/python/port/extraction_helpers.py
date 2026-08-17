@@ -1,8 +1,11 @@
 import json
+import re
 import zipfile
 from io import StringIO
 
 import pandas as pd
+
+CHANNEL_URL_RE = re.compile(r"^https://www\.youtube\.com/channel/[^/]+$")
 
 
 def find_activity_entries(file, title_url_marker):
@@ -40,6 +43,26 @@ def find_activity_entries(file, title_url_marker):
                 return data
 
     return None
+
+
+def find_channel_event_entries(entries):
+    """
+    Filter "My Activity" entries down to channel subscribe/unsubscribe
+    events. These carry a bare channel URL (.../channel/CHANNEL_ID, no
+    /watch?v= or /results?search_query=) and never have an activityControls
+    value - a structural signature that holds regardless of locale.
+
+    Subscribing and unsubscribing both land in this same set: telling them
+    apart needs the (localized) verb in the entry's title, which isn't
+    parsed here, so callers get an undifferentiated event log.
+    """
+    return [
+        entry
+        for entry in entries
+        if isinstance(entry, dict)
+        and CHANNEL_URL_RE.match(entry.get("titleUrl", ""))
+        and not entry.get("activityControls")
+    ]
 
 
 def find_csv_by_shape(file, num_columns, matches):

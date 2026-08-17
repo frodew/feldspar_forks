@@ -44,13 +44,17 @@ def process(data):
             check_ddp = check_if_valid_youtube_ddp(fileResult.value)
             yield FlushLogs
 
-            if check_ddp == "valid":
+            if check_ddp in ("valid", "valid_my_activity"):
                 behaviors_to_extract = [
                     "watch_history",
                     "search_history",
-                    "comments",
                     "subscriptions",
                 ]
+                if check_ddp == "valid":
+                    # Comments aren't present in "My Activity" exports, so
+                    # there's nothing to extract - skip it rather than show
+                    # participants a table that's always empty.
+                    behaviors_to_extract.insert(2, "comments")
 
                 extraction_result = []
 
@@ -118,10 +122,6 @@ def check_if_valid_youtube_ddp(file):
             found_html_file = False
 
             for file_info in zip_ref.infolist():
-                # The Takeout folder is always named "YouTube <conjunction>
-                # YouTube Music" - the conjunction word is localized, but
-                # "YouTube" and "YouTube Music" themselves are brand names
-                # and stay untranslated in every language.
                 if (
                     "YouTube" in file_info.filename
                     and "YouTube Music" in file_info.filename
@@ -145,9 +145,15 @@ def check_if_valid_youtube_ddp(file):
                     )
                     return "valid"
 
-            else:
-                logger.info("YouTube folder not found. Does not seem like a YouTube DDP.")
-                return "invalid_no_ddp"
+            # Not a YouTube-product DDP by folder name. It might instead be a Google "My Activity" export - its top-level folder name is localized ("Meine Aktivitäten", "My Activity", ...), so the brand-name check above doesn't apply. Detect it by content instead: a JSON file shaped like a My Activity export (a list of entries carrying English, non-localized keys).
+            if check_if_my_activity_export(zip_ref):
+                logger.info(
+                    'YouTube folder not found, but a "My Activity"-shaped JSON file was. Seems like a YouTube My Activity DDP.'
+                )
+                return "valid_my_activity"
+
+            logger.info("YouTube folder not found. Does not seem like a YouTube DDP.")
+            return "invalid_no_ddp"
 
     except zipfile.BadZipFile:
         logger.warning("Invalid ZIP file.")
@@ -156,6 +162,38 @@ def check_if_valid_youtube_ddp(file):
     except Exception as e:
         logger.exception(f"An error occurred while validating the zip file: {e}")
         return "invalid_file_error"
+
+
+def check_if_my_activity_export(zip_ref):
+    """
+    Check whether the ZIP contains a JSON file shaped like a Google "My
+    Activity" export: a list of entries where most carry the "time" and
+    "products" keys. Those keys are always in English regardless of the
+    export's locale, unlike file/folder names, so this works without
+    knowing the participant's language.
+    """
+    for file_info in zip_ref.infolist():
+        if not file_info.filename.endswith(".json"):
+            continue
+        try:
+            with zip_ref.open(file_info.filename) as json_file:
+                data = json.loads(json_file.read().decode("utf-8"))
+        except Exception:
+            continue
+
+        if not isinstance(data, list) or not data:
+            continue
+
+        sample = data[:20]
+        matches = sum(
+            1
+            for entry in sample
+            if isinstance(entry, dict) and "time" in entry and "products" in entry
+        )
+        if matches >= max(1, len(sample) // 2):
+            return True
+
+    return False
 
 
 def extract_behavior(behavior_name, file):

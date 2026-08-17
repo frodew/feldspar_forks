@@ -47,8 +47,14 @@ def extract_watch_history(file):
 
     for entry in entries:
         title_url = entry.get("titleUrl", "")
-        if WATCH_URL_MARKER not in title_url:
+        if title_url and WATCH_URL_MARKER not in title_url:
             continue
+
+        # Entries with no titleUrl at all are watch-shaped placeholders
+        # Google didn't attach a video to: either a redacted "hidden
+        # section" or a since-deleted video. They carry no video/channel
+        # info to extract, but are kept here (instead of dropped) so the
+        # data isn't silently lost - they can be filtered back out later.
 
         # Extract video ID from URL (format: https://www.youtube.com/watch?v=VIDEO_ID)
         video_id = title_url.split("watch?v=")[-1].split("&")[0]
@@ -70,11 +76,15 @@ def extract_watch_history(file):
         # Extract timestamp
         timestamp = entry.get("time", "")
 
-        # Extract activity controls
+        # Extract activity controls. Hidden-section entries never have
+        # activityControls, but some carry a "description" with a retention
+        # countdown (e.g. "Ablaufdatum: 02.11.2026") - stash that in the same
+        # column instead of adding a column that's empty for ~all other rows.
         activity_controls = entry.get("activityControls", [])
-        activity_controls_str = (
-            ", ".join(activity_controls) if activity_controls else ""
-        )
+        if activity_controls:
+            activity_controls_str = ", ".join(activity_controls)
+        else:
+            activity_controls_str = entry.get("description", "")
 
         # Video title is kept as exported (e.g. "Watched X" or "X angesehen"):
         # the verb is placed differently in every language, so there's no
