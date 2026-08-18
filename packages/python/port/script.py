@@ -152,6 +152,13 @@ def check_if_valid_youtube_ddp(file):
                 )
                 return "valid_my_activity"
 
+            if check_if_my_activity_html_export(zip_ref):
+                logger.info(
+                    'YouTube folder not found, but a "My Activity" YouTube folder with HTML file(s) was. '
+                    "Participant likely selected HTML instead of JSON."
+                )
+                return "invalid_no_json"
+
             logger.info("YouTube folder not found. Does not seem like a YouTube DDP.")
             return "invalid_no_ddp"
 
@@ -193,6 +200,17 @@ def check_if_my_activity_export(zip_ref):
         if matches >= max(1, len(sample) // 2):
             return True
 
+    return False
+
+
+def check_if_my_activity_html_export(zip_ref):
+    """
+    Check whether the ZIP contains an HTML file inside a "My Activity" YouTube product folder.
+    """
+    for file_info in zip_ref.infolist():
+        path_parts = file_info.filename.split("/")
+        if "YouTube" in path_parts[:-1] and file_info.filename.endswith(".html"):
+            return True
     return False
 
 
