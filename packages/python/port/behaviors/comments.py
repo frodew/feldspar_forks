@@ -37,7 +37,7 @@ def format_timestamp(timestamp_str):
 def extract_comments(file):
     """
     Extract YouTube comments from ZIP file.
-    Returns complete list of comments with Channel ID, Video ID, and Timestamp.
+    Returns complete list of comments with Video ID and Timestamp.
     Sorted by time with newest on top.
     """
 
@@ -52,7 +52,6 @@ def extract_comments(file):
         {
             "Timestamp": comments_csv.iloc[:, 2].apply(format_timestamp),
             "Video ID": comments_csv.iloc[:, 4],
-            "Channel ID": comments_csv.iloc[:, 1],
         }
     )
 
