@@ -2,11 +2,15 @@ from datetime import datetime
 
 import pandas as pd
 
-from port.extraction_helpers import find_activity_entries
-
-# Marks a "My Activity" entry as a watch (rather than a search): the URL
-# shape doesn't depend on the export language, unlike the file/folder names.
-WATCH_URL_MARKER = "/watch?v="
+from port.extraction_helpers import (
+    AD_CLICK_URL_PREFIX,
+    SEARCH_URL_MARKER,
+    WATCH_URL_MARKER,
+    activity_controls_with_header,
+    find_activity_entries,
+    is_channel_event,
+    title_url_contains,
+)
 
 # Title used in prompt_consent() to describe this behavior
 title = {
@@ -28,16 +32,43 @@ def format_timestamp(timestamp_str):
         return timestamp_str
 
 
+def activity_id_and_kind(title_url):
+    """Identify what an entry points at, from the URL shape alone.
+
+    Returns (id, kind). `kind` is empty for an ordinary video view, which is
+    the overwhelming majority, so the Details column stays empty for those.
+    """
+    if not title_url:
+        return "", ""
+    if WATCH_URL_MARKER in title_url:
+        return title_url.split("watch?v=")[-1].split("&")[0], ""
+    if title_url.startswith(AD_CLICK_URL_PREFIX):
+        # The whole destination is already in the entry's title, so there is
+        # no id worth pulling out separately.
+        return "", "clicked ad"
+    if "/post/" in title_url:
+        return title_url.split("/post/")[-1].split("?")[0], "community post"
+    if "/playlist" in title_url:
+        return title_url.split("list=")[-1].split("&")[0], "playlist"
+    if "/shorts/" in title_url:
+        return title_url.split("/shorts/")[-1].split("?")[0], "shorts"
+    return "", "other"
+
+
 def extract_watch_history(file):
     """
     Extract YouTube watch history from ZIP file.
-    Returns complete list of watched videos with Video ID, Channel ID, Channel name, and Timestamp.
+
+    Keeps every YouTube activity entry except searches and subscribe events,
+    which have their own tables. So alongside video views this carries ad
+    clicks, community posts, playlist saves and shared Shorts, each labelled
+    in the Details column rather than split off into a table of its own.
     Sorted by time with newest on top.
     """
 
     # Find the watch history file by structure, regardless of its (localized)
     # file/folder name
-    entries = find_activity_entries(file, WATCH_URL_MARKER)
+    entries = find_activity_entries(file, title_url_contains(WATCH_URL_MARKER))
 
     if entries is None:
         return None
@@ -47,7 +78,9 @@ def extract_watch_history(file):
 
     for entry in entries:
         title_url = entry.get("titleUrl", "")
-        if title_url and WATCH_URL_MARKER not in title_url:
+
+        # Searches and subscribe/unsubscribe events get their own tables.
+        if SEARCH_URL_MARKER in title_url or is_channel_event(entry):
             continue
 
         # Entries with no titleUrl at all are watch-shaped placeholders
@@ -56,8 +89,7 @@ def extract_watch_history(file):
         # info to extract, but are kept here (instead of dropped) so the
         # data isn't silently lost - they can be filtered back out later.
 
-        # Extract video ID from URL (format: https://www.youtube.com/watch?v=VIDEO_ID)
-        video_id = title_url.split("watch?v=")[-1].split("&")[0]
+        video_id, kind = activity_id_and_kind(title_url)
 
         # Extract channel information from subtitles if available
         channel_id = None
@@ -76,20 +108,22 @@ def extract_watch_history(file):
         # Extract timestamp
         timestamp = entry.get("time", "")
 
-        # Extract activity controls. Hidden-section entries never have
-        # activityControls, but some carry a "description" with a retention
-        # countdown (e.g. "Ablaufdatum: 02.11.2026") - stash that in the same
-        # column instead of adding a column that's empty for ~all other rows.
-        activity_controls = entry.get("activityControls", [])
-        if activity_controls:
-            activity_controls_str = ", ".join(activity_controls)
-        else:
-            activity_controls_str = entry.get("description", "")
+        activity_controls_str = activity_controls_with_header(entry)
 
         # Video title is kept as exported (e.g. "Watched X" or "X angesehen"):
         # the verb is placed differently in every language, so there's no
         # reliable way to strip it without hardcoding each language's grammar
         video_title = entry.get("title", "")
+
+        # Ads carry a "details" entry naming Google Ads as the source, kept
+        # here verbatim. It marks impressions and clicks alike, so the kind
+        # from the URL shape is appended to tell those apart.
+        details = entry.get("details", [])
+        details_str = ", ".join(
+            part
+            for part in [d.get("name", "") for d in details] + [kind]
+            if part
+        )
 
         video_data.append(
             {
@@ -99,6 +133,7 @@ def extract_watch_history(file):
                 "Channel Name": channel_name if channel_name else "",
                 "Channel ID": channel_id if channel_id else "",
                 "Activity Controls": activity_controls_str,
+                "Details": details_str,
             }
         )
 
@@ -111,6 +146,7 @@ def extract_watch_history(file):
                 "Channel Name",
                 "Channel ID",
                 "Activity Controls",
+                "Details",
             ]
         )
 

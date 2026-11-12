@@ -5,12 +5,9 @@ import pandas as pd
 from port.extraction_helpers import (
     find_activity_entries,
     find_channel_event_entries,
+    is_channel_event,
     find_csv_by_shape,
 )
-
-# Marks a "My Activity" entry as a watch (rather than a search): used here
-# only to locate the right JSON file, the same way watch_history.py does.
-WATCH_URL_MARKER = "/watch?v="
 
 # Title used in prompt_consent() to describe this behavior
 title = {
@@ -63,7 +60,9 @@ def extract_subscriptions(file):
             }
         )
 
-    entries = find_activity_entries(file, WATCH_URL_MARKER)
+    # Locate the activity file by its channel events rather than by watch
+    # entries: a participant with watch history turned off still has these.
+    entries = find_activity_entries(file, is_channel_event)
     if entries is None:
         return None
 

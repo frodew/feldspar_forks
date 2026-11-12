@@ -2,11 +2,12 @@ from datetime import datetime
 
 import pandas as pd
 
-from port.extraction_helpers import find_activity_entries
-
-# Marks a "My Activity" entry as a search (rather than a watch): the URL
-# shape doesn't depend on the export language, unlike the file/folder names.
-SEARCH_URL_MARKER = "/results?search_query="
+from port.extraction_helpers import (
+    SEARCH_URL_MARKER,
+    activity_controls_with_header,
+    find_activity_entries,
+    title_url_contains,
+)
 
 # Title used in prompt_consent() to describe this behavior
 title = {
@@ -37,7 +38,7 @@ def extract_search_history(file):
 
     # Find the search history file by structure, regardless of its
     # (localized) file/folder name
-    entries = find_activity_entries(file, SEARCH_URL_MARKER)
+    entries = find_activity_entries(file, title_url_contains(SEARCH_URL_MARKER))
 
     if entries is None:
         return None
@@ -53,11 +54,7 @@ def extract_search_history(file):
         # Extract timestamp
         timestamp = entry.get("time", "")
 
-        # Extract activity controls
-        activity_controls = entry.get("activityControls", [])
-        activity_controls_str = (
-            ", ".join(activity_controls) if activity_controls else ""
-        )
+        activity_controls_str = activity_controls_with_header(entry)
 
         # Search query is kept as exported (e.g. "Searched for X" or
         # "Gesucht nach: X"): the verb is placed differently in every
