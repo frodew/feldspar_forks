@@ -15,14 +15,6 @@ logger = logging.getLogger(__name__)
 # MAIN FUNCTION INITIATING THE DONATION PROCESS
 ############################
 
-# Row cap applied to each behavior's table when it's shown in the consent form and donated (via PropsUIPromptConsentFormTable.data_frame_max_size).
-BEHAVIOR_ROW_CAPS = {
-    "watch_history": 50000,
-    "search_history": 20000,
-    "comments": 10000,
-    "subscriptions": 10000,
-}
-
 
 def process(data):
     # `data` is a context dict routed from the JS framework: {"sessionId": "...", "locale": "..."}
@@ -345,9 +337,8 @@ def prompt_consent(data, behaviors_list):
                 table_data["title"]
             ),  # Using title as description for now
             table_data["df"],
-            data_frame_max_size=BEHAVIOR_ROW_CAPS.get(
-                table_data["behavior_name"], 10000
-            ),
+            # No cap: show and donate every row.
+            data_frame_max_size=None,
         )
         table_list.append(table)
 
