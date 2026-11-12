@@ -117,11 +117,16 @@ def extract_watch_history(file):
 
         # Ads carry a "details" entry naming Google Ads as the source, kept
         # here verbatim. It marks impressions and clicks alike, so the kind
-        # from the URL shape is appended to tell those apart.
+        # from the URL shape is appended to tell those apart. The retention
+        # countdown (e.g. "Ablaufdatum: 02.11.2026") rides along as well, but
+        # only for entries that named no activity control: those are the ones
+        # that used to carry it in the Activity Controls column, and keeping
+        # that column free of it is what makes "no control named" detectable.
         details = entry.get("details", [])
+        countdown = "" if entry.get("activityControls") else entry.get("description", "")
         details_str = ", ".join(
             part
-            for part in [d.get("name", "") for d in details] + [kind]
+            for part in [d.get("name", "") for d in details] + [kind, countdown]
             if part
         )
 

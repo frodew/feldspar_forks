@@ -122,14 +122,13 @@ def activity_controls_with_header(entry):
     column rather than one of its own: that repeats "YouTube" on most rows,
     but keeps the sub-product in the donation instead of discarding it.
 
-    Entries with no activityControls sometimes carry a "description" with a
-    retention countdown (e.g. "Ablaufdatum: 02.11.2026") - use that instead,
-    rather than adding a column that is empty for nearly every other row.
+    Nothing else goes in here. The value is the header alone exactly when the
+    entry named no activity control, which is what lets the analysis tell "no
+    control named" from "control named" without matching localised text.
     """
     controls = entry.get("activityControls", [])
-    controls_str = ", ".join(controls) if controls else entry.get("description", "")
     header = entry.get("header", "")
-    return ", ".join(part for part in (header, controls_str) if part)
+    return ", ".join(part for part in (header, ", ".join(controls)) if part)
 
 
 def find_csv_by_shape(file, num_columns, matches):
