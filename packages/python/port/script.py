@@ -8,6 +8,7 @@ import pandas as pd
 import port.api.props as props
 from port.api.assets import *
 from port.api.commands import CommandSystemDonate, CommandSystemExit, CommandUIRender, FlushLogs
+from port.extraction_helpers import in_youtube_folder
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ def process(data):
                     behaviors_to_extract.insert(2, "comments")
 
                 extraction_result = []
+                sources = {}
 
                 for index, behavior_name in enumerate(behaviors_to_extract, start=1):
                     percentage = (index / len(behaviors_to_extract)) * 100
@@ -60,6 +62,7 @@ def process(data):
 
                     result = extract_behavior(behavior_name, fileResult.value)
                     extraction_result.append(result)
+                    sources[behavior_name] = result.attrs.get("source", "")
                     yield FlushLogs
 
                 if len(extraction_result) > 0:
@@ -93,6 +96,7 @@ def process(data):
         result = yield prompt
         if result.__type__ == "PayloadJSON":
             data_submission_data = json.loads(result.value)
+            add_source_metadata(data_submission_data, sources)
             logger.info("participant consented, donating data")
             yield donate(f"{sessionId}-{key}", json.dumps(data_submission_data))
         if result.__type__ == "PayloadFalse":
@@ -120,20 +124,22 @@ def check_if_valid_youtube_ddp(file):
                 ):
                     found_folder_name_check_ddp = True
 
-                # Check if any .html file exists (watch-history.html, search-history.html, etc.)
-                if file_info.filename.endswith(".html"):
+                # Only check HTML inside a YouTube folder (watch-history.html, MeineAktivitäten.html, ...)
+                if file_info.filename.endswith(".html") and in_youtube_folder(
+                    file_info.filename
+                ):
                     found_html_file = True
 
             if found_folder_name_check_ddp:
                 if found_html_file:
                     logger.info(
-                        "YouTube folder found and HTML file(s) found in the ZIP file. Seems like a YouTube HTML DDP."
+                        "YouTube folder found with HTML file(s) in it. Seems like a YouTube HTML DDP."
                     )
                     return "invalid_no_json"
 
                 else:
                     logger.info(
-                        "YouTube folder found and no HTML files found in the ZIP file. Seems like a real YouTube JSON DDP."
+                        "YouTube folder found with no HTML files in it. Seems like a real YouTube JSON DDP."
                     )
                     return "valid"
 
@@ -144,7 +150,7 @@ def check_if_valid_youtube_ddp(file):
                 )
                 return "valid_my_activity"
 
-            if check_if_my_activity_html_export(zip_ref):
+            if found_html_file:
                 logger.info(
                     'YouTube folder not found, but a "My Activity" YouTube folder with HTML file(s) was. '
                     "Participant likely selected HTML instead of JSON."
@@ -195,15 +201,19 @@ def check_if_my_activity_export(zip_ref):
     return False
 
 
-def check_if_my_activity_html_export(zip_ref):
+def add_source_metadata(data_submission_data, sources):
+    """Record for each donated table which ZIP member it was extracted from.
+
+    This is what tells the two export types apart after the fact: a YouTube
+    product export's subscriptions come from a CSV and carry no
+    subscribe/unsubscribe events, while a "My Activity" export's come from the
+    activity JSON. Without it that distinction is unrecoverable once the ZIP
+    is gone.
     """
-    Check whether the ZIP contains an HTML file inside a "My Activity" YouTube product folder.
-    """
-    for file_info in zip_ref.infolist():
-        path_parts = file_info.filename.split("/")
-        if "YouTube" in path_parts[:-1] and file_info.filename.endswith(".html"):
-            return True
-    return False
+    for table_id, source in sources.items():
+        table = data_submission_data.get(table_id)
+        if isinstance(table, dict):
+            table.setdefault("metadata", {})["source"] = source
 
 
 def extract_behavior(behavior_name, file):
@@ -236,7 +246,10 @@ def extract_behavior(behavior_name, file):
                     columns=["No Information"],
                 )
 
-            logger.info(f"{behavior_name}: extracted {len(result)} rows")
+            logger.info(
+                f"{behavior_name}: extracted {len(result)} rows "
+                f"from {result.attrs.get('source', '')}"
+            )
             return result
         except Exception as e:
             logger.exception(f"Extraction failed for behavior '{behavior_name}'")

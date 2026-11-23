@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from port.extraction_helpers import find_csv_by_shape
+from port.extraction_helpers import find_csv_by_shape, with_source
 
 # Title used in prompt_consent() to describe this behavior
 title = {
@@ -41,7 +41,7 @@ def extract_comments(file):
     Sorted by time with newest on top.
     """
 
-    comments_csv = find_csv_by_shape(file, 6, is_comments_csv)
+    comments_csv, source = find_csv_by_shape(file, 6, is_comments_csv)
 
     if comments_csv is None:
         return None
@@ -60,4 +60,4 @@ def extract_comments(file):
     df = df.sort_values(by="Timestamp_sort", ascending=False).reset_index(drop=True)
     df = df.drop(columns=["Timestamp_sort"])
 
-    return df
+    return with_source(df, source)

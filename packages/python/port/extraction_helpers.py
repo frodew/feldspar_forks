@@ -69,7 +69,8 @@ def find_activity_entries(file, matches):
     regardless of locale, so `matches(entry)` can identify the entries we
     want independent of language.
 
-    Returns the file's YouTube entries, or None if no file has any match.
+    Returns the file's YouTube entries and the name of the ZIP member they
+    came from, or (None, None) if no file has any match.
 
     Three guards matter for Takeout exports that bundle products beyond
     YouTube, where a first-match scan picks whichever product folder happens
@@ -81,6 +82,7 @@ def find_activity_entries(file, matches):
     nothing outside YouTube remains.
     """
     best = None
+    best_name = None
     best_count = 0
 
     with zipfile.ZipFile(file, "r") as zip_ref:
@@ -100,9 +102,10 @@ def find_activity_entries(file, matches):
             count = sum(1 for entry in entries if matches(entry))
             if count > best_count:
                 best = entries
+                best_name = file_name
                 best_count = count
 
-    return best
+    return best, best_name
 
 
 def title_url_contains(title_url_marker):
@@ -143,11 +146,17 @@ def find_csv_by_shape(file, num_columns, matches):
     it looks like the file we want (e.g. by checking cell values, which are
     not translated).
 
-    Returns the parsed DataFrame, or None if no matching file exists.
+    Only CSVs inside a YouTube folder are read, mirroring
+    `find_activity_entries`: a Takeout that bundles other products carries
+    plenty of unrelated CSVs, and parsing those in the browser costs memory
+    for nothing.
+
+    Returns the parsed DataFrame and the name of the ZIP member it came
+    from, or (None, None) if no matching file exists.
     """
     with zipfile.ZipFile(file, "r") as zip_ref:
         for file_name in zip_ref.namelist():
-            if not file_name.endswith(".csv"):
+            if not file_name.endswith(".csv") or not in_youtube_folder(file_name):
                 continue
             try:
                 with zip_ref.open(file_name) as csv_file:
@@ -159,6 +168,16 @@ def find_csv_by_shape(file, num_columns, matches):
                 continue
 
             if matches(df):
-                return df
+                return df, file_name
 
-    return None
+    return None, None
+
+
+def with_source(df, source):
+    """Tag a table with the ZIP member it was extracted from.
+
+    Rides along in `DataFrame.attrs` so it can reach the donation metadata
+    without becoming a column that repeats on every row participants see.
+    """
+    df.attrs["source"] = source
+    return df

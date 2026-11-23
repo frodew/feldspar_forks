@@ -7,6 +7,7 @@ from port.extraction_helpers import (
     find_channel_event_entries,
     is_channel_event,
     find_csv_by_shape,
+    with_source,
 )
 
 # Title used in prompt_consent() to describe this behavior
@@ -48,21 +49,24 @@ def extract_subscriptions(file):
     that direction is only written in a (localized) verb we don't parse.
     """
 
-    subscriptions_csv = find_csv_by_shape(file, 3, is_subscriptions_csv)
+    subscriptions_csv, source = find_csv_by_shape(file, 3, is_subscriptions_csv)
 
     if subscriptions_csv is not None:
         # Columns in correct order (by position, since the column headers
         # are localized)
-        return pd.DataFrame(
-            {
-                "Channel Name": subscriptions_csv.iloc[:, 2],
-                "Channel ID": subscriptions_csv.iloc[:, 0],
-            }
+        return with_source(
+            pd.DataFrame(
+                {
+                    "Channel Name": subscriptions_csv.iloc[:, 2],
+                    "Channel ID": subscriptions_csv.iloc[:, 0],
+                }
+            ),
+            source,
         )
 
     # Locate the activity file by its channel events rather than by watch
     # entries: a participant with watch history turned off still has these.
-    entries = find_activity_entries(file, is_channel_event)
+    entries, source = find_activity_entries(file, is_channel_event)
     if entries is None:
         return None
 
@@ -86,11 +90,13 @@ def extract_subscriptions(file):
         )
 
     if not event_data:
-        return pd.DataFrame(columns=["Timestamp", "Event", "Channel ID"])
+        return with_source(
+            pd.DataFrame(columns=["Timestamp", "Event", "Channel ID"]), source
+        )
 
     df = pd.DataFrame(event_data)
     df["Timestamp_sort"] = pd.to_datetime(df["Timestamp"], errors="coerce")
     df = df.sort_values(by="Timestamp_sort", ascending=False).reset_index(drop=True)
     df = df.drop(columns=["Timestamp_sort"])
 
-    return df
+    return with_source(df, source)

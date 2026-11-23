@@ -7,6 +7,7 @@ from port.extraction_helpers import (
     activity_controls_with_header,
     find_activity_entries,
     title_url_contains,
+    with_source,
 )
 
 # Title used in prompt_consent() to describe this behavior
@@ -38,7 +39,7 @@ def extract_search_history(file):
 
     # Find the search history file by structure, regardless of its
     # (localized) file/folder name
-    entries = find_activity_entries(file, title_url_contains(SEARCH_URL_MARKER))
+    entries, source = find_activity_entries(file, title_url_contains(SEARCH_URL_MARKER))
 
     if entries is None:
         return None
@@ -69,7 +70,10 @@ def extract_search_history(file):
         )
 
     if not search_data:
-        return pd.DataFrame(columns=["Timestamp", "Search Query", "Activity Controls"])
+        return with_source(
+            pd.DataFrame(columns=["Timestamp", "Search Query", "Activity Controls"]),
+            source,
+        )
 
     # Create DataFrame
     df = pd.DataFrame(search_data)
@@ -79,4 +83,4 @@ def extract_search_history(file):
     df = df.sort_values(by="Timestamp_sort", ascending=False).reset_index(drop=True)
     df = df.drop(columns=["Timestamp_sort"])
 
-    return df
+    return with_source(df, source)

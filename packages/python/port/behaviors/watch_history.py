@@ -10,6 +10,7 @@ from port.extraction_helpers import (
     find_activity_entries,
     is_channel_event,
     title_url_contains,
+    with_source,
 )
 
 # Title used in prompt_consent() to describe this behavior
@@ -68,7 +69,7 @@ def extract_watch_history(file):
 
     # Find the watch history file by structure, regardless of its (localized)
     # file/folder name
-    entries = find_activity_entries(file, title_url_contains(WATCH_URL_MARKER))
+    entries, source = find_activity_entries(file, title_url_contains(WATCH_URL_MARKER))
 
     if entries is None:
         return None
@@ -143,16 +144,19 @@ def extract_watch_history(file):
         )
 
     if not video_data:
-        return pd.DataFrame(
-            columns=[
-                "Timestamp",
-                "Video Title",
-                "Video ID",
-                "Channel Name",
-                "Channel ID",
-                "Activity Controls",
-                "Details",
-            ]
+        return with_source(
+            pd.DataFrame(
+                columns=[
+                    "Timestamp",
+                    "Video Title",
+                    "Video ID",
+                    "Channel Name",
+                    "Channel ID",
+                    "Activity Controls",
+                    "Details",
+                ]
+            ),
+            source,
         )
 
     # Create DataFrame
@@ -163,4 +167,4 @@ def extract_watch_history(file):
     df = df.sort_values(by="Timestamp_sort", ascending=False).reset_index(drop=True)
     df = df.drop(columns=["Timestamp_sort"])
 
-    return df
+    return with_source(df, source)
