@@ -1,14 +1,13 @@
 import importlib
 import json
 import logging
-import zipfile
 
 import pandas as pd
 
 import port.api.props as props
 from port.api.assets import *
 from port.api.commands import CommandSystemDonate, CommandSystemExit, CommandUIRender, FlushLogs
-from port.extraction_helpers import in_youtube_folder
+from port.ddp import YoutubeDdp
 
 logger = logging.getLogger(__name__)
 
@@ -33,21 +32,26 @@ def process(data):
         fileResult = yield render_data_submission_page([promptFile])
 
         if fileResult.__type__ == "PayloadFile":
-            # Check if valid YouTube DDP
-            check_ddp = check_if_valid_youtube_ddp(fileResult.value)
+            # Parsing a large HTML export takes seconds; keep the page informed.
+            yield render_data_submission_page(
+                prompt_extraction_message("Reading file", 0)
+            )
+
+            ddp = YoutubeDdp(fileResult.value)
+            logger.info(
+                f"DDP verdict={ddp.verdict}, {len(ddp.entries)} YouTube activity "
+                f"entries from [{ddp.sources}], "
+                f"subscriptions csv={ddp.subscriptions_csv_source or 'none'}, "
+                f"comments csv={ddp.comments_csv_source or 'none'}"
+            )
             yield FlushLogs
 
-            if check_ddp in ("valid", "valid_my_activity"):
-                behaviors_to_extract = [
-                    "watch_history",
-                    "search_history",
-                    "subscriptions",
-                ]
-                if check_ddp == "valid":
-                    # Comments aren't present in "My Activity" exports, so
-                    # there's nothing to extract - skip it rather than show
-                    # participants a table that's always empty.
-                    behaviors_to_extract.insert(2, "comments")
+            if ddp.verdict == "valid":
+                behaviors_to_extract = ["watch_history", "search_history"]
+                if ddp.comments_csv is not None:
+                    # Only a YouTube-DDP has comments; skip the empty table.
+                    behaviors_to_extract.append("comments")
+                behaviors_to_extract.append("subscriptions")
 
                 extraction_result = []
                 sources = {}
@@ -60,32 +64,15 @@ def process(data):
                     promptMessage = prompt_extraction_message(message, percentage)
                     yield render_data_submission_page(promptMessage)
 
-                    result = extract_behavior(behavior_name, fileResult.value)
+                    result = extract_behavior(behavior_name, ddp)
                     extraction_result.append(result)
                     sources[behavior_name] = result.attrs.get("source", "")
                     yield FlushLogs
 
-                if len(extraction_result) > 0:
-                    data_result = extraction_result
-                    break
-                else:
-                    retry_result = yield render_data_submission_page(
-                        retry_confirmation()
-                    )
-                    if retry_result.__type__ == "PayloadTrue":
-                        continue
-                    else:
-                        break
+                data_result = extraction_result
+                break
 
-            elif check_ddp == "invalid_no_json":
-                retry_result = yield render_data_submission_page(
-                    retry_confirmation_no_json()
-                )
-
-                if retry_result.__type__ == "PayloadTrue":
-                    continue
-
-            else:  # also for invalid_no_ddp
+            else:  # invalid_no_ddp, invalid_file_zip, invalid_file_error
                 retry_result = yield render_data_submission_page(retry_confirmation())
 
                 if retry_result.__type__ == "PayloadTrue":
@@ -110,105 +97,12 @@ def process(data):
 ############################
 
 
-def check_if_valid_youtube_ddp(file):
-    """Check if the uploaded file is a valid YouTube data download package"""
-    try:
-        with zipfile.ZipFile(file, "r") as zip_ref:
-            found_folder_name_check_ddp = False
-            found_html_file = False
-
-            for file_info in zip_ref.infolist():
-                if (
-                    "YouTube" in file_info.filename
-                    and "YouTube Music" in file_info.filename
-                ):
-                    found_folder_name_check_ddp = True
-
-                # Only check HTML inside a YouTube folder (watch-history.html, MeineAktivitäten.html, ...)
-                if file_info.filename.endswith(".html") and in_youtube_folder(
-                    file_info.filename
-                ):
-                    found_html_file = True
-
-            if found_folder_name_check_ddp:
-                if found_html_file:
-                    logger.info(
-                        "YouTube folder found with HTML file(s) in it. Seems like a YouTube HTML DDP."
-                    )
-                    return "invalid_no_json"
-
-                else:
-                    logger.info(
-                        "YouTube folder found with no HTML files in it. Seems like a real YouTube JSON DDP."
-                    )
-                    return "valid"
-
-            # Not a YouTube-product DDP by folder name. It might instead be a Google "My Activity" export - its top-level folder name is localized ("Meine Aktivitäten", "My Activity", ...), so the brand-name check above doesn't apply. Detect it by content instead: a JSON file shaped like a My Activity export (a list of entries carrying English, non-localized keys).
-            if check_if_my_activity_export(zip_ref):
-                logger.info(
-                    'YouTube folder not found, but a "My Activity"-shaped JSON file was. Seems like a YouTube My Activity DDP.'
-                )
-                return "valid_my_activity"
-
-            if found_html_file:
-                logger.info(
-                    'YouTube folder not found, but a "My Activity" YouTube folder with HTML file(s) was. '
-                    "Participant likely selected HTML instead of JSON."
-                )
-                return "invalid_no_json"
-
-            logger.info("YouTube folder not found. Does not seem like a YouTube DDP.")
-            return "invalid_no_ddp"
-
-    except zipfile.BadZipFile:
-        logger.warning("Invalid ZIP file.")
-        return "invalid_file_zip"
-
-    except Exception as e:
-        logger.exception(f"An error occurred while validating the zip file: {e}")
-        return "invalid_file_error"
-
-
-def check_if_my_activity_export(zip_ref):
-    """
-    Check whether the ZIP contains a JSON file shaped like a Google "My
-    Activity" export: a list of entries where most carry the "time" and
-    "products" keys. Those keys are always in English regardless of the
-    export's locale, unlike file/folder names, so this works without
-    knowing the participant's language.
-    """
-    for file_info in zip_ref.infolist():
-        if not file_info.filename.endswith(".json"):
-            continue
-        try:
-            with zip_ref.open(file_info.filename) as json_file:
-                data = json.loads(json_file.read().decode("utf-8"))
-        except Exception:
-            continue
-
-        if not isinstance(data, list) or not data:
-            continue
-
-        sample = data[:20]
-        matches = sum(
-            1
-            for entry in sample
-            if isinstance(entry, dict) and "time" in entry and "products" in entry
-        )
-        if matches >= max(1, len(sample) // 2):
-            return True
-
-    return False
-
-
 def add_source_metadata(data_submission_data, sources):
-    """Record for each donated table which ZIP member it was extracted from.
+    """Record for each donated table which ZIP member it came from.
 
-    This is what tells the two export types apart after the fact: a YouTube
-    product export's subscriptions come from a CSV and carry no
-    subscribe/unsubscribe events, while a "My Activity" export's come from the
-    activity JSON. Without it that distinction is unrecoverable once the ZIP
-    is gone.
+    This is what tells the two DDP types apart once the ZIP is gone: a
+    YouTube-DDP's subscriptions come from a CSV with no subscribe events, a
+    MyActivity-DDP's from the activity file.
     """
     for table_id, source in sources.items():
         table = data_submission_data.get(table_id)
@@ -216,13 +110,13 @@ def add_source_metadata(data_submission_data, sources):
             table.setdefault("metadata", {})["source"] = source
 
 
-def extract_behavior(behavior_name, file):
+def extract_behavior(behavior_name, source):
     """
-    Extract data for a specific behavior using the new per-file system.
+    Extract data for a specific behavior.
 
     Parameters:
     - behavior_name: Name of the behavior (e.g., 'watch_history', 'search_history')
-    - file: File-like object for the uploaded ZIP
+    - source: a YoutubeDdp, or the uploaded ZIP to build one from
 
     Returns:
     - DataFrame with extracted data or error DataFrame
@@ -234,13 +128,12 @@ def extract_behavior(behavior_name, file):
         # Get extraction function from the module
         extraction_function = getattr(behavior_module, f"extract_{behavior_name}")
 
-        # Call the behavior's extraction function directly with the file
         try:
-            result = extraction_function(file)
+            result = extraction_function(source)
 
-            # Handle None return (missing files)
+            # Handle None return (nothing of this behavior in the DDP)
             if result is None:
-                logger.info(f"{behavior_name}: file missing in DDP")
+                logger.info(f"{behavior_name}: no rows in DDP")
                 return pd.DataFrame(
                     [f'(File "{behavior_name}" missing)'],
                     columns=["No Information"],
@@ -396,18 +289,6 @@ def retry_confirmation():
         }
     )
     ok = props.Translatable({"de": "Erneut versuchen"})
-
-    return props.PropsUIPromptConfirm(text, ok)
-
-
-def retry_confirmation_no_json():
-    text = props.Translatable(
-        {
-            "de": 'Leider können wir Ihre Datei nicht verarbeiten. Es scheint so, dass Sie aus Versehen die HTML-Version Ihrer YouTube-Daten beantragt haben.\nBitte beantragen Sie erneut eine Datenspende bei YouTube und wählen Sie dabei "JSON" als Dateiformat aus (wie in der Anleitung beschrieben).'
-        }
-    )
-
-    ok = props.Translatable({"de": "Erneut versuchen mit richtigen Daten"})
 
     return props.PropsUIPromptConfirm(text, ok)
 
