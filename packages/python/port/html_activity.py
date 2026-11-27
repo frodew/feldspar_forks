@@ -1,10 +1,14 @@
 """Read an activity HTML export into the same entry dicts the JSON export carries."""
 
 import html
+import io
 import re
 from datetime import datetime, timedelta
 
-CELL_RE = re.compile(r'<div class="outer-cell.*?(?=<div class="outer-cell|</body>)', re.S)
+# Cards are read one at a time off a chunked stream: a 137 MB export holding a
+# single emoji is a 4-bytes-per-character string, far too big to hold whole.
+CELL_START = '<div class="outer-cell'
+CHUNK_SIZE = 1 << 20
 HEADER_RE = re.compile(r'<p class="mdl-typography--title">(.*?)<br>', re.S)
 BODY_RE = re.compile(
     r'<div class="content-cell mdl-cell mdl-cell--6-col mdl-typography--body-1">(.*?)</div>',
@@ -152,7 +156,41 @@ def parse_cell(cell):
     return entry
 
 
+def iter_cells(chunks):
+    """Yield each activity card from an iterable of text chunks.
+
+    Cards are delimited by their opening div and the document's closing body,
+    so a chunk boundary anywhere (including mid-delimiter) only ever leaves a
+    partial card in `carry` for the next chunk to complete.
+    """
+    carry = ""
+    open_card = False
+
+    for chunk in chunks:
+        pieces = (carry + chunk).split(CELL_START)
+        if len(pieces) > 1:
+            if open_card:
+                yield CELL_START + pieces[0]
+            for piece in pieces[1:-1]:
+                yield CELL_START + piece
+            open_card = True
+        carry = pieces[-1]
+
+    if open_card:
+        yield CELL_START + carry.split("</body>")[0]
+
+
 def parse_activity_html(source):
     """An entry dict for every activity card in an export's HTML."""
-    body_start = source.find("<body")
-    return [parse_cell(match.group()) for match in CELL_RE.finditer(source, body_start)]
+    return [parse_cell(cell) for cell in iter_cells([source])]
+
+
+def read_activity_html(member):
+    """The same, read off an open ZIP member a chunk at a time.
+
+    `newline=""` because a title can contain a carriage return, which the
+    default universal-newline translation would rewrite.
+    """
+    stream = io.TextIOWrapper(member, encoding="utf-8", newline="")
+    chunks = iter(lambda: stream.read(CHUNK_SIZE), "")
+    return [parse_cell(cell) for cell in iter_cells(chunks)]

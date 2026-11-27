@@ -16,7 +16,7 @@ from port.extraction_helpers import (
     in_youtube_folder,
     is_youtube_entry,
 )
-from port.html_activity import parse_activity_html
+from port.html_activity import read_activity_html
 
 logger = logging.getLogger(__name__)
 
@@ -39,20 +39,20 @@ def is_comments_csv(df):
     return df.iloc[:, 5].astype(str).str.contains('{"text"', regex=False).any()
 
 
-def parse_activity_json(source):
-    data = json.loads(source)
+def read_activity_json(member):
+    data = json.loads(member.read().decode("utf-8"))
     return data if isinstance(data, list) else []
 
 
-def read_members(zip_ref, members, suffix, parse):
-    """Every member with `suffix` parsed, each entry paired with its member."""
+def read_members(zip_ref, members, suffix, read):
+    """Every member with `suffix` read, each entry paired with its member."""
     entries = []
     for file_name in members:
         if not file_name.endswith(suffix):
             continue
         try:
             with zip_ref.open(file_name) as member:
-                data = parse(member.read().decode("utf-8"))
+                data = read(member)
         except Exception:
             logger.exception(f"could not read {file_name}")
             continue
@@ -68,10 +68,10 @@ def read_activity_entries(zip_ref, members):
     just a row filter over the pool. JSON wins over HTML so that a DDP holding
     both formats doesn't count every row twice.
     """
-    entries = read_members(zip_ref, members, ".json", parse_activity_json)
+    entries = read_members(zip_ref, members, ".json", read_activity_json)
     if entries:
         return entries
-    return read_members(zip_ref, members, ".html", parse_activity_html)
+    return read_members(zip_ref, members, ".html", read_activity_html)
 
 
 class YoutubeDdp:
